@@ -7,7 +7,6 @@
 <link rel="stylesheet" href="/static/styles.css" />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23d97757'/%3E%3C/svg%3E" />
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/html2canvas-pro@1.5.8/dist/html2canvas-pro.min.js"></script>
 </head>
 <body>
 <header class="topbar">
@@ -34,7 +33,13 @@
       <button data-w="1y">1y</button>
       <button data-w="all" class="on">All</button>
     </div>
-    <button id="export-btn" title="Export a shareable PNG of the highlights">⬇ Export</button>
+    <div class="export-wrap">
+      <button id="export-btn" title="Export a shareable PNG">⬇ Export ▾</button>
+      <div id="export-menu" class="export-menu" hidden>
+        <button data-mode="highlights">Highlights<span class="muted"> · KPIs + savings</span></button>
+        <button data-mode="full">Full report<span class="muted"> · everything</span></button>
+      </div>
+    </div>
     <button id="refresh" title="Re-index .jsonl files">↻ Refresh</button>
     <button id="gmail-btn" title="Connect Gmail to auto-pull Anthropic receipts">✉ Connect Gmail</button>
   </div>
@@ -162,6 +167,7 @@
   </footer>
 </main>
 
+<script src="/static/exporter.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>

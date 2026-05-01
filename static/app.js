@@ -629,59 +629,33 @@ window.addEventListener("resize", () => {
   _resizeT = setTimeout(() => loadHeatmap(), 180);
 });
 
-// ---------- Export to PNG ----------
-async function exportImage() {
+// ---------- Export menu (Canvas-rendered PNG, see exporter.js) ----------
+function bindExport() {
   const btn = document.getElementById("export-btn");
-  if (!window.html2canvas) {
-    alert("Export library not loaded yet. Try again in a second.");
-    return;
-  }
-  btn.disabled = true; const orig = btn.textContent; btn.textContent = "rendering…";
-  // To preserve Chart.js canvas content we render the live DOM. Hide everything
-  // we don't want in the export, then capture, then restore.
-  const main = document.querySelector("main");
-  const sections = Array.from(main.children);
-  const keep = sections.slice(0, 3); // KPI row, Daily activity, Heatmap
-  const hideEls = [
-    document.querySelector("header.topbar"),
-    document.querySelector(".footer"),
-    ...sections.slice(3),
-  ].filter(Boolean);
-  const prev = hideEls.map(el => [el, el.style.display]);
-  // Stamp banner that explains the export
-  const banner = document.createElement("div");
-  banner.id = "export-banner";
-  banner.style.cssText = `display:flex;align-items:center;gap:12px;padding:18px 24px;border-bottom:1px solid ${getCSS('--border-soft')};margin:-18px -24px 18px;background:${getCSS('--panel')};`;
-  banner.innerHTML = `
-    <div style="width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg, ${getCSS('--accent')}, ${getCSS('--accent-2')});box-shadow:0 4px 14px rgba(217,119,87,.28)"></div>
-    <div style="display:flex;flex-direction:column;">
-      <div style="font-size:18px;font-weight:600;letter-spacing:-0.01em;color:${getCSS('--text')};">Claude Usage · ${STATE.window}</div>
-      <div style="font-size:12px;color:${getCSS('--muted')};">${escapeHtml(document.getElementById('meta-line').textContent)}</div>
-    </div>
-    <div style="margin-left:auto;font-size:11px;color:${getCSS('--muted')};text-align:right;">runs locally · no data leaves your machine<br/>generated ${new Date().toLocaleString()}</div>`;
-  try {
-    hideEls.forEach(el => el.style.display = "none");
-    main.insertBefore(banner, main.firstChild);
-    await new Promise(r => requestAnimationFrame(r));
-    const canvas = await window.html2canvas(main, {
-      backgroundColor: getCSS("--bg"),
-      scale: 2, useCORS: true, logging: false, foreignObjectRendering: false,
-    });
-    const url = canvas.toDataURL("image/png");
-    const a = document.createElement("a");
-    const stamp = new Date().toISOString().slice(0, 10);
-    a.href = url; a.download = `claude-usage-${STATE.window}-${stamp}.png`;
-    document.body.appendChild(a); a.click(); a.remove();
-  } catch (e) {
-    console.error(e);
-    alert("Export failed: " + (e.message || e));
-  } finally {
-    if (banner.parentNode) banner.parentNode.removeChild(banner);
-    prev.forEach(([el, d]) => el.style.display = d);
-    btn.disabled = false; btn.textContent = orig;
-  }
+  const menu = document.getElementById("export-menu");
+  if (!btn || !menu) return;
+  btn.addEventListener("click", e => {
+    e.stopPropagation();
+    menu.hidden = !menu.hidden;
+  });
+  document.addEventListener("click", e => {
+    if (!menu.hidden && !menu.contains(e.target) && e.target !== btn) menu.hidden = true;
+  });
+  menu.addEventListener("click", async e => {
+    const item = e.target.closest("button[data-mode]");
+    if (!item) return;
+    const mode = item.dataset.mode;
+    menu.hidden = true;
+    btn.disabled = true; const prev = btn.textContent; btn.textContent = "rendering…";
+    try {
+      await window.__exporter.run(mode);
+    } catch (err) {
+      console.error(err); alert("Export failed: " + (err.message || err));
+    } finally {
+      btn.disabled = false; btn.textContent = prev;
+    }
+  });
 }
-
-document.getElementById("export-btn").addEventListener("click", exportImage);
+bindExport();
 
 reloadAll();
