@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Claude Usage Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="stylesheet" href="/static/styles.css" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23d97757'/%3E%3C/svg%3E" />
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas-pro@1.5.8/dist/html2canvas-pro.min.js"></script>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <div class="logo"></div>
+    <div>
+      <h1>Claude Usage</h1>
+      <div class="subtitle">
+        <span id="meta-line">loading…</span>
+        <span class="local-pill" title="Everything runs on your machine. Logs, billing, and Gmail tokens never leave this device.">
+          <span class="dot"></span> 100% local
+        </span>
+      </div>
+    </div>
+  </div>
+  <div class="controls">
+    <div class="windows" id="windows">
+      <button data-w="today">Today</button>
+      <button data-w="1w">1w</button>
+      <button data-w="15d">15d</button>
+      <button data-w="1m">1m</button>
+      <button data-w="3m">3m</button>
+      <button data-w="6m">6m</button>
+      <button data-w="1y">1y</button>
+      <button data-w="all" class="on">All</button>
+    </div>
+    <button id="export-btn" title="Export a shareable PNG of the highlights">⬇ Export</button>
+    <button id="refresh" title="Re-index .jsonl files">↻ Refresh</button>
+    <button id="gmail-btn" title="Connect Gmail to auto-pull Anthropic receipts">✉ Connect Gmail</button>
+  </div>
+</header>
+
+<dialog id="gmail-dialog">
+  <div class="dlg-head"><h3 id="gmail-dlg-title">Connect Gmail</h3><button class="dlg-close" data-close>×</button></div>
+  <div id="gmail-dlg-body"></div>
+</dialog>
+
+<main>
+  <!-- KPI cards -->
+  <section class="kpi-row">
+    <div class="kpi"><div class="k">Total tokens</div>     <div class="v" id="kpi-tokens" data-loading="1"></div><div class="sub" id="kpi-tokens-sub"></div></div>
+    <div class="kpi"><div class="k">Messages</div>         <div class="v" id="kpi-msgs"   data-loading="1"></div><div class="sub" id="kpi-msgs-sub"></div></div>
+    <div class="kpi"><div class="k">API cost</div>         <div class="v" id="kpi-api"    data-loading="1"></div><div class="sub" id="kpi-api-sub">at standard API rates</div></div>
+    <div class="kpi"><div class="k">Subscription paid</div><div class="v" id="kpi-sub"    data-loading="1"></div><div class="sub" id="kpi-sub-detail"></div></div>
+    <div class="kpi savings">
+      <div class="k">Saved by subscribing</div>
+      <div class="v" id="kpi-savings" data-loading="1"></div>
+      <div class="sub" id="kpi-mult"></div>
+      <div class="badge" id="kpi-savings-badge" hidden></div>
+    </div>
+  </section>
+
+  <!-- Timeline -->
+  <section class="card">
+    <div class="card-head">
+      <h2>Daily activity</h2>
+      <div class="legend-toggle"><label><input type="checkbox" id="show-cost" checked /> overlay cost</label></div>
+    </div>
+    <div class="chart-wrap"><canvas id="chart-timeline"></canvas></div>
+  </section>
+
+  <!-- Heatmap -->
+  <section class="card">
+    <div class="card-head">
+      <h2>Activity heatmap</h2>
+      <div class="muted" id="heatmap-hint">tokens per day · darker = busier</div>
+    </div>
+    <div class="heatmap-grid">
+      <div id="cal-heatmap"></div>
+      <aside id="heatmap-side"></aside>
+    </div>
+  </section>
+
+  <!-- Donuts -->
+  <section class="grid-2">
+    <div class="card">
+      <div class="card-head"><h2>Tokens by model</h2></div>
+      <div class="chart-wrap small"><canvas id="chart-model-tokens"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>Cost by model</h2></div>
+      <div class="chart-wrap small"><canvas id="chart-model-cost"></canvas></div>
+    </div>
+  </section>
+
+  <!-- Top projects -->
+  <section class="card">
+    <div class="card-head">
+      <h2>Top projects</h2>
+      <div class="seg" id="proj-seg">
+        <button data-by="tokens" class="on">tokens</button>
+        <button data-by="cost">cost</button>
+        <button data-by="msgs">messages</button>
+        <button data-by="sessions">sessions</button>
+      </div>
+    </div>
+    <div class="chart-wrap tall"><canvas id="chart-projects"></canvas></div>
+  </section>
+
+  <!-- Distributions -->
+  <section class="grid-2">
+    <div class="card">
+      <div class="card-head"><h2>Hour-of-day</h2></div>
+      <div class="chart-wrap small"><canvas id="chart-hours"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>Weekday</h2></div>
+      <div class="chart-wrap small"><canvas id="chart-dows"></canvas></div>
+    </div>
+  </section>
+
+  <!-- Top sessions table -->
+  <section class="card">
+    <div class="card-head">
+      <h2>Longest conversations</h2>
+      <div class="seg" id="sess-seg">
+        <button data-by="tokens" class="on">tokens</button>
+        <button data-by="msgs">messages</button>
+        <button data-by="duration">duration</button>
+        <button data-by="cost">cost</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table id="sessions-table">
+        <thead><tr>
+          <th>Project</th><th>Model</th><th>Msgs</th><th>Tokens</th>
+          <th>Cost</th><th>Duration</th><th>Started</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Top days -->
+  <section class="card">
+    <div class="card-head"><h2>Most active days</h2></div>
+    <div class="table-wrap">
+      <table id="topdays-table">
+        <thead><tr><th>Day</th><th>Msgs</th><th>Sessions</th><th>Tokens</th><th>Cost</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <span id="footer-meta"></span>
+    <span id="footer-billing"></span>
+    <span class="footer-privacy">
+      <span class="dot"></span>
+      No data leaves your computer. SQLite, Gmail tokens, and billing live in this folder only.
+    </span>
+  </footer>
+</main>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

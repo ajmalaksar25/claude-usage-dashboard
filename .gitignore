@@ -1,0 +1,17 @@
+usage.db
+usage.db-journal
+usage.db-wal
+usage.db-shm
+
+# Per-user secrets and personal data — never commit
+billing.json
+credentials.json
+token.json
+
+__pycache__/
+*.pyc
+.venv/
+venv/
+.idea/
+.vscode/
+.DS_Store
