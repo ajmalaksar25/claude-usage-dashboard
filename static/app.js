@@ -35,6 +35,8 @@ Chart.defaults.plugins.tooltip.bodyColor = getCSS("--text");
 const STATE = {
   window: "all",
   account: "",         // "" = all accounts; set from the header switcher
+  project: "",         // "" = all projects; set by clicking a project (cross-filter)
+  tab: "overview",     // active tab: overview | sessions | activity
   projBy: "tokens",
   sessBy: "tokens",
   showCost: true,
@@ -47,13 +49,25 @@ const STATE = {
 
 const charts = {};       // id -> Chart instance
 
-async function api(path, params={}) {
+async function api(path, params={}, opts={}) {
   const u = new URL(path, location.origin);
   for (const [k,v] of Object.entries(params)) if (v != null) u.searchParams.set(k, v);
   if (STATE.account && path.startsWith("/api/")) u.searchParams.set("account", STATE.account);
+  if (STATE.project && path.startsWith("/api/") && !opts.skipProject) u.searchParams.set("project", STATE.project);
   const r = await fetch(u);
   if (!r.ok) throw new Error(`${path} ${r.status}`);
   return r.json();
+}
+
+// ---------- project cross-filter ----------
+function setProjectFilter(name) {
+  STATE.project = (name && name !== STATE.project) ? name : "";
+  const pill = document.getElementById("proj-pill");
+  if (pill) {
+    pill.hidden = !STATE.project;
+    if (STATE.project) pill.innerHTML = `${escapeHtml(STATE.project)} <span class="x">✕</span>`;
+  }
+  reloadAll();
 }
 
 // ---------- accounts ----------
@@ -408,18 +422,22 @@ async function loadModels() {
 
 // ---------- top projects ----------
 async function loadProjects() {
-  const j = await api("/api/by_project", { window: STATE.window, limit: 15 });
+  // The filter source stays unfiltered — the selected bar is highlighted instead.
+  const j = await api("/api/by_project", { window: STATE.window, limit: 15 }, { skipProject: true });
   const labels = j.rows.map(r => r.project);
   const data   = j.rows.map(r => r[STATE.projBy]);
   const fmt = STATE.projBy === "cost" ? fmtMoney : fmtCompact;
+  const colorFor = r => alpha(COLORS[0], !STATE.project || r.project === STATE.project ? .85 : .25);
   const cfg = {
     type: "bar",
     data: { labels, datasets: [{
       label: STATE.projBy, data,
-      backgroundColor: alpha(COLORS[0], .85), borderColor: COLORS[0], borderWidth: 0,
+      backgroundColor: j.rows.map(colorFor), borderColor: COLORS[0], borderWidth: 0,
     }]},
     options: {
       indexAxis: "y", responsive: true, maintainAspectRatio: false,
+      onClick: (_e, els) => { if (els.length) setProjectFilter(j.rows[els[0].index].project); },
+      onHover: (e, els) => { e.native.target.style.cursor = els.length ? "pointer" : "default"; },
       scales: {
         x: { grid: { color: getCSS("--grid") }, ticks: { callback: v => STATE.projBy === "cost" ? "$"+fmtCompact(v) : fmtCompact(v) } },
         y: { grid: { display: false } },
@@ -428,7 +446,7 @@ async function loadProjects() {
         legend: { display: false },
         tooltip: { callbacks: {
           title: ctx => j.rows[ctx[0].dataIndex].project_path || ctx[0].label,
-          label: ctx => `${STATE.projBy}: ${fmt(ctx.parsed.x)}`,
+          label: ctx => `${STATE.projBy}: ${fmt(ctx.parsed.x)} — click to filter`,
         } },
       },
     },
@@ -471,13 +489,16 @@ async function loadTopSessions() {
   for (const r of j.rows) {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td><div class="project-cell"><span class="name">${escapeHtml(r.project || "—")}</span><span class="path">${escapeHtml(r.project_path || "")}</span></div></td>
+      <td><div class="project-cell clickable" title="Filter everything to this project"><span class="name">${escapeHtml(r.project || "—")}</span><span class="path">${escapeHtml(r.project_path || "")}</span></div></td>
       <td>${escapeHtml(r.model || "—")}</td>
       <td class="num">${fmtInt(r.msgs)}</td>
       <td class="num">${fmtCompact(r.tokens)}</td>
       <td class="num">${fmtMoney(r.cost)}</td>
       <td class="num">${fmtDur(r.duration_minutes)}</td>
       <td class="num">${fmtDate(r.first_ts)}</td>`;
+    if (r.project) {
+      tr.querySelector(".project-cell").addEventListener("click", () => setProjectFilter(r.project));
+    }
     tbody.appendChild(tr);
   }
 }
@@ -531,8 +552,10 @@ async function loadExtras() {
   const root = document.getElementById("extras-root");
   if (!root) return;
   STATE.extrasReady = !!status.enabled;
-  if (!STATE.extrasReady) { root.hidden = true; return; }
+  const tabBtn = document.getElementById("tab-activity-btn");
+  if (!STATE.extrasReady) { root.hidden = true; if (tabBtn) tabBtn.hidden = true; return; }
   root.hidden = false;
+  if (tabBtn) tabBtn.hidden = false;
 
   const ov = await api("/api/extras/overview", { window: STATE.window });
   setKpi("ex-kpi-tools",  fmtInt(ov.tool_calls || 0), ov.tool_calls || 0);
@@ -987,6 +1010,30 @@ async function renderProfiles() {
   });
 }
 
+function bindTabs() {
+  const bar = document.getElementById("tabs");
+  if (!bar) return;
+  bar.addEventListener("click", e => {
+    const b = e.target.closest("button[data-tab]");
+    if (!b) return;
+    bar.querySelectorAll("button[data-tab]").forEach(x => x.classList.toggle("on", x === b));
+    STATE.tab = b.dataset.tab;
+    document.querySelector("main").dataset.tab = STATE.tab;
+    // Charts sized while hidden come back at 0×0 — resize them once visible
+    requestAnimationFrame(() => {
+      Object.values(charts).forEach(c => { try { c.resize(); } catch {} });
+      if (STATE.tab === "overview") loadHeatmap();
+    });
+  });
+  document.getElementById("proj-pill").addEventListener("click", () => setProjectFilter(""));
+  // Deep link: /#tab=sessions or /#tab=activity
+  const m = location.hash.match(/^#tab=(\w+)$/);
+  if (m) {
+    const btn = bar.querySelector(`button[data-tab="${m[1]}"]`);
+    if (btn) { btn.hidden = false; btn.click(); }
+  }
+}
+
 function bindProfiles() {
   const dlg = document.getElementById("profiles-dialog");
   document.getElementById("profiles-btn").addEventListener("click", () => {
@@ -1045,6 +1092,7 @@ bindSessSeg();
 bindRefresh();
 bindCostToggle();
 bindGmail();
+bindTabs();
 bindProfiles();
 bindSkillsSeg();
 bindCallsControls();

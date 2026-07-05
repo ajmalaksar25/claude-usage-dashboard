@@ -46,7 +46,9 @@
         <button data-mode="full">Full report<span class="muted"> · everything</span></button>
       </div>
     </div>
-    <button id="profiles-btn" title="See and manage Claude accounts on this machine">◉ Accounts</button>
+    <button id="profiles-btn" class="accounts-btn" title="See and manage Claude accounts on this machine">
+      <span class="acct-dots" aria-hidden="true"><i></i><i></i></span>Accounts
+    </button>
     <button id="refresh" title="Re-index .jsonl files">↻ Refresh</button>
     <button id="gmail-btn" title="Connect Gmail to auto-pull Anthropic receipts">✉ Connect Gmail</button>
   </div>
@@ -71,7 +73,7 @@
   </div>
 </dialog>
 
-<main>
+<main data-tab="overview">
   <!-- KPI cards -->
   <section class="kpi-row">
     <div class="kpi hero"><div class="k">Would have cost</div><div class="v" id="kpi-api" data-loading="1"></div><div class="sub" id="kpi-api-sub">at standard API rates</div></div>
@@ -86,8 +88,16 @@
     </div>
   </section>
 
+  <!-- Tabs: cut the scroll depth into three views -->
+  <nav class="tabs" id="tabs" aria-label="Dashboard sections">
+    <button data-tab="overview" class="on">Overview</button>
+    <button data-tab="sessions">Sessions &amp; days</button>
+    <button data-tab="activity" id="tab-activity-btn" hidden>Activity &amp; tools</button>
+    <button id="proj-pill" class="proj-pill" hidden title="Click to clear the project filter"></button>
+  </nav>
+
   <!-- Timeline -->
-  <section class="card">
+  <section class="card" data-tab="overview">
     <div class="card-head">
       <h2>Daily activity</h2>
       <div class="legend-toggle"><label><input type="checkbox" id="show-cost" checked /> overlay cost</label></div>
@@ -96,7 +106,7 @@
   </section>
 
   <!-- Heatmap -->
-  <section class="card">
+  <section class="card" data-tab="overview">
     <div class="card-head">
       <h2>Activity heatmap</h2>
       <div class="muted" id="heatmap-hint">tokens per day · darker = busier</div>
@@ -108,7 +118,7 @@
   </section>
 
   <!-- Donuts -->
-  <section class="grid-2">
+  <section class="grid-2" data-tab="overview">
     <div class="card">
       <div class="card-head"><h2>Tokens by model</h2></div>
       <div class="chart-wrap small"><canvas id="chart-model-tokens"></canvas></div>
@@ -120,7 +130,7 @@
   </section>
 
   <!-- Top projects -->
-  <section class="card">
+  <section class="card" data-tab="overview">
     <div class="card-head">
       <h2>Top projects</h2>
       <div class="seg" id="proj-seg">
@@ -134,7 +144,7 @@
   </section>
 
   <!-- Distributions -->
-  <section class="grid-2">
+  <section class="grid-2" data-tab="overview">
     <div class="card">
       <div class="card-head"><h2>Hour-of-day</h2></div>
       <div class="chart-wrap small"><canvas id="chart-hours"></canvas></div>
@@ -146,7 +156,7 @@
   </section>
 
   <!-- Top sessions table -->
-  <section class="card">
+  <section class="card" data-tab="sessions">
     <div class="card-head">
       <h2>Longest conversations</h2>
       <div class="seg" id="sess-seg">
@@ -168,7 +178,7 @@
   </section>
 
   <!-- Top days -->
-  <section class="card">
+  <section class="card" data-tab="sessions">
     <div class="card-head"><h2>Most active days</h2></div>
     <div class="table-wrap">
       <table id="topdays-table">

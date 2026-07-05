@@ -85,15 +85,27 @@ def _acct(req: Request) -> str:
     return "" if a.lower() == "all" else a
 
 
-def _af(acct: str) -> tuple[str, tuple]:
-    """(SQL fragment, extra params) for an optional account filter."""
-    return (" AND account = ?", (acct,)) if acct else ("", ())
+def _proj(req: Request) -> str:
+    """Project filter from ?project=... ('' means no filter)."""
+    return (req.query_params.get("project") or "").strip()
+
+
+def _af(acct: str, proj: str = "") -> tuple[str, tuple]:
+    """(SQL fragment, extra params) for optional account/project filters."""
+    frag, params = "", []
+    if acct:
+        frag += " AND account = ?"
+        params.append(acct)
+    if proj:
+        frag += " AND project = ?"
+        params.append(proj)
+    return frag, tuple(params)
 
 
 # ---------- aggregate queries ----------
 
-def q_summary(frm: str, to: str, acct: str = "") -> dict:
-    frag, ap = _af(acct)
+def q_summary(frm: str, to: str, acct: str = "", proj: str = "") -> dict:
+    frag, ap = _af(acct, proj)
     with _conn() as c:
         row = c.execute(
             f"""
@@ -135,11 +147,11 @@ def q_summary(frm: str, to: str, acct: str = "") -> dict:
     return d
 
 
-def q_timeseries(frm: str, to: str, bucket: str, acct: str = "") -> list[dict]:
+def q_timeseries(frm: str, to: str, bucket: str, acct: str = "", proj: str = "") -> list[dict]:
     grp = "ts_day" if bucket == "day" else (
         "substr(ts,1,13)" if bucket == "hour" else "ts_day"
     )
-    frag, ap = _af(acct)
+    frag, ap = _af(acct, proj)
     with _conn() as c:
         rows = c.execute(
             f"""
@@ -161,8 +173,8 @@ def q_timeseries(frm: str, to: str, bucket: str, acct: str = "") -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def q_by_model(frm: str, to: str, acct: str = "") -> list[dict]:
-    frag, ap = _af(acct)
+def q_by_model(frm: str, to: str, acct: str = "", proj: str = "") -> list[dict]:
+    frag, ap = _af(acct, proj)
     with _conn() as c:
         rows = c.execute(
             f"""
@@ -182,8 +194,8 @@ def q_by_model(frm: str, to: str, acct: str = "") -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def q_by_project(frm: str, to: str, limit: int, acct: str = "") -> list[dict]:
-    frag, ap = _af(acct)
+def q_by_project(frm: str, to: str, limit: int, acct: str = "", proj: str = "") -> list[dict]:
+    frag, ap = _af(acct, proj)
     with _conn() as c:
         rows = c.execute(
             f"""
@@ -206,8 +218,8 @@ def q_by_project(frm: str, to: str, limit: int, acct: str = "") -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def q_heatmap(frm: str, to: str, acct: str = "") -> list[dict]:
-    frag, ap = _af(acct)
+def q_heatmap(frm: str, to: str, acct: str = "", proj: str = "") -> list[dict]:
+    frag, ap = _af(acct, proj)
     with _conn() as c:
         rows = c.execute(
             f"""
@@ -226,8 +238,8 @@ def q_heatmap(frm: str, to: str, acct: str = "") -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def q_distributions(frm: str, to: str, acct: str = "") -> dict:
-    frag, ap = _af(acct)
+def q_distributions(frm: str, to: str, acct: str = "", proj: str = "") -> dict:
+    frag, ap = _af(acct, proj)
     with _conn() as c:
         hours = c.execute(
             f"""SELECT ts_hour AS hour, COUNT(*) AS msgs,
@@ -244,14 +256,14 @@ def q_distributions(frm: str, to: str, acct: str = "") -> dict:
     return {"hours": [dict(r) for r in hours], "dows": [dict(r) for r in dows]}
 
 
-def q_top_sessions(frm: str, to: str, by: str, limit: int, acct: str = "") -> list[dict]:
+def q_top_sessions(frm: str, to: str, by: str, limit: int, acct: str = "", proj: str = "") -> list[dict]:
     order_col = {
         "msgs": "msgs",
         "tokens": "tokens",
         "cost": "cost",
         "duration": "duration_minutes",
     }.get(by, "tokens")
-    frag, ap = _af(acct)
+    frag, ap = _af(acct, proj)
     with _conn() as c:
         rows = c.execute(
             f"""
@@ -277,8 +289,8 @@ def q_top_sessions(frm: str, to: str, by: str, limit: int, acct: str = "") -> li
     return [dict(r) for r in rows]
 
 
-def q_top_days(frm: str, to: str, limit: int, acct: str = "") -> list[dict]:
-    frag, ap = _af(acct)
+def q_top_days(frm: str, to: str, limit: int, acct: str = "", proj: str = "") -> list[dict]:
+    frag, ap = _af(acct, proj)
     with _conn() as c:
         rows = c.execute(
             f"""
@@ -325,8 +337,8 @@ def _extras_table_present() -> bool:
     return r is not None
 
 
-def q_extras_skills(frm: str, to: str, acct: str = "") -> list[dict]:
-    frag, ap = _af(acct)
+def q_extras_skills(frm: str, to: str, acct: str = "", proj: str = "") -> list[dict]:
+    frag, ap = _af(acct, proj)
     with _conn() as c:
         rows = c.execute(
             f"""
@@ -341,8 +353,8 @@ def q_extras_skills(frm: str, to: str, acct: str = "") -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def q_extras_tools(frm: str, to: str, acct: str = "") -> list[dict]:
-    frag, ap = _af(acct)
+def q_extras_tools(frm: str, to: str, acct: str = "", proj: str = "") -> list[dict]:
+    frag, ap = _af(acct, proj)
     with _conn() as c:
         rows = c.execute(
             f"""
@@ -358,8 +370,8 @@ def q_extras_tools(frm: str, to: str, acct: str = "") -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def q_extras_mcp(frm: str, to: str, acct: str = "") -> list[dict]:
-    frag, ap = _af(acct)
+def q_extras_mcp(frm: str, to: str, acct: str = "", proj: str = "") -> list[dict]:
+    frag, ap = _af(acct, proj)
     with _conn() as c:
         rows = c.execute(
             f"""
@@ -374,8 +386,8 @@ def q_extras_mcp(frm: str, to: str, acct: str = "") -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def q_extras_agents(frm: str, to: str, acct: str = "") -> list[dict]:
-    frag, ap = _af(acct)
+def q_extras_agents(frm: str, to: str, acct: str = "", proj: str = "") -> list[dict]:
+    frag, ap = _af(acct, proj)
     with _conn() as c:
         rows = c.execute(
             f"""
@@ -390,8 +402,8 @@ def q_extras_agents(frm: str, to: str, acct: str = "") -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def q_extras_slash(frm: str, to: str, acct: str = "") -> list[dict]:
-    frag, ap = _af(acct)
+def q_extras_slash(frm: str, to: str, acct: str = "", proj: str = "") -> list[dict]:
+    frag, ap = _af(acct, proj)
     with _conn() as c:
         rows = c.execute(
             f"""
@@ -406,8 +418,8 @@ def q_extras_slash(frm: str, to: str, acct: str = "") -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def q_extras_files(frm: str, to: str, limit: int, acct: str = "") -> list[dict]:
-    frag, ap = _af(acct)
+def q_extras_files(frm: str, to: str, limit: int, acct: str = "", proj: str = "") -> list[dict]:
+    frag, ap = _af(acct, proj)
     with _conn() as c:
         rows = c.execute(
             f"""
@@ -427,8 +439,8 @@ def q_extras_files(frm: str, to: str, limit: int, acct: str = "") -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def q_extras_bash(frm: str, to: str, limit: int, acct: str = "") -> list[dict]:
-    frag, ap = _af(acct)
+def q_extras_bash(frm: str, to: str, limit: int, acct: str = "", proj: str = "") -> list[dict]:
+    frag, ap = _af(acct, proj)
     with _conn() as c:
         rows = c.execute(
             f"""
@@ -444,8 +456,8 @@ def q_extras_bash(frm: str, to: str, limit: int, acct: str = "") -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def q_extras_errors(frm: str, to: str, acct: str = "") -> list[dict]:
-    frag, ap = _af(acct)
+def q_extras_errors(frm: str, to: str, acct: str = "", proj: str = "") -> list[dict]:
+    frag, ap = _af(acct, proj)
     with _conn() as c:
         rows = c.execute(
             f"""
@@ -472,6 +484,7 @@ def q_extras_calls(
     limit: int,
     offset: int,
     acct: str = "",
+    proj: str = "",
 ) -> dict:
     """Individual tool calls, newest first, with total for pagination."""
     where = ["ts >= ?", "ts < ?"]
@@ -479,6 +492,9 @@ def q_extras_calls(
     if acct:
         where.append("account = ?")
         params.append(acct)
+    if proj:
+        where.append("project = ?")
+        params.append(proj)
     if tool:
         where.append("tool_name = ?")
         params.append(tool)
@@ -503,9 +519,9 @@ def q_extras_calls(
     return {"total": total, "rows": [dict(r) for r in rows]}
 
 
-def q_extras_overview(frm: str, to: str, acct: str = "") -> dict:
+def q_extras_overview(frm: str, to: str, acct: str = "", proj: str = "") -> dict:
     """Single-roundtrip aggregate for the Activity tab."""
-    frag, ap = _af(acct)
+    frag, ap = _af(acct, proj)
     with _conn() as c:
         # totals + cardinality
         tot = c.execute(
@@ -547,39 +563,39 @@ def index(request: Request):
 @app.get("/api/summary")
 def api_summary(request: Request):
     f, t, label = _qparams(request)
-    return {"window": label, "from": f, "to": t, **q_summary(f, t, _acct(request))}
+    return {"window": label, "from": f, "to": t, **q_summary(f, t, _acct(request), _proj(request))}
 
 
 @app.get("/api/timeseries")
 def api_timeseries(request: Request):
     f, t, label = _qparams(request)
     bucket = request.query_params.get("bucket", "day")
-    return {"window": label, "bucket": bucket, "rows": q_timeseries(f, t, bucket, _acct(request))}
+    return {"window": label, "bucket": bucket, "rows": q_timeseries(f, t, bucket, _acct(request), _proj(request))}
 
 
 @app.get("/api/by_model")
 def api_by_model(request: Request):
     f, t, label = _qparams(request)
-    return {"window": label, "rows": q_by_model(f, t, _acct(request))}
+    return {"window": label, "rows": q_by_model(f, t, _acct(request), _proj(request))}
 
 
 @app.get("/api/by_project")
 def api_by_project(request: Request):
     f, t, label = _qparams(request)
     limit = int(request.query_params.get("limit", "20"))
-    return {"window": label, "rows": q_by_project(f, t, limit, _acct(request))}
+    return {"window": label, "rows": q_by_project(f, t, limit, _acct(request), _proj(request))}
 
 
 @app.get("/api/heatmap")
 def api_heatmap(request: Request):
     f, t, label = _qparams(request)
-    return {"window": label, "rows": q_heatmap(f, t, _acct(request))}
+    return {"window": label, "rows": q_heatmap(f, t, _acct(request), _proj(request))}
 
 
 @app.get("/api/distributions")
 def api_distributions(request: Request):
     f, t, label = _qparams(request)
-    return {"window": label, **q_distributions(f, t, _acct(request))}
+    return {"window": label, **q_distributions(f, t, _acct(request), _proj(request))}
 
 
 @app.get("/api/top_sessions")
@@ -587,14 +603,14 @@ def api_top_sessions(request: Request):
     f, t, label = _qparams(request)
     by = request.query_params.get("by", "tokens")
     limit = int(request.query_params.get("limit", "20"))
-    return {"window": label, "by": by, "rows": q_top_sessions(f, t, by, limit, _acct(request))}
+    return {"window": label, "by": by, "rows": q_top_sessions(f, t, by, limit, _acct(request), _proj(request))}
 
 
 @app.get("/api/top_days")
 def api_top_days(request: Request):
     f, t, label = _qparams(request)
     limit = int(request.query_params.get("limit", "10"))
-    return {"window": label, "rows": q_top_days(f, t, limit, _acct(request))}
+    return {"window": label, "rows": q_top_days(f, t, limit, _acct(request), _proj(request))}
 
 
 @app.get("/api/meta")
@@ -738,7 +754,7 @@ def api_extras_overview(request: Request):
     if fail is not None:
         return fail
     f, t, label = _qparams(request)
-    return {"window": label, **q_extras_overview(f, t, _acct(request))}
+    return {"window": label, **q_extras_overview(f, t, _acct(request), _proj(request))}
 
 
 @app.get("/api/extras/skills")
@@ -747,7 +763,7 @@ def api_extras_skills(request: Request):
     if fail is not None:
         return fail
     f, t, label = _qparams(request)
-    return {"window": label, "rows": q_extras_skills(f, t, _acct(request))}
+    return {"window": label, "rows": q_extras_skills(f, t, _acct(request), _proj(request))}
 
 
 @app.get("/api/extras/tools")
@@ -756,7 +772,7 @@ def api_extras_tools(request: Request):
     if fail is not None:
         return fail
     f, t, label = _qparams(request)
-    return {"window": label, "rows": q_extras_tools(f, t, _acct(request))}
+    return {"window": label, "rows": q_extras_tools(f, t, _acct(request), _proj(request))}
 
 
 @app.get("/api/extras/mcp")
@@ -765,7 +781,7 @@ def api_extras_mcp(request: Request):
     if fail is not None:
         return fail
     f, t, label = _qparams(request)
-    return {"window": label, "rows": q_extras_mcp(f, t, _acct(request))}
+    return {"window": label, "rows": q_extras_mcp(f, t, _acct(request), _proj(request))}
 
 
 @app.get("/api/extras/agents")
@@ -774,7 +790,7 @@ def api_extras_agents(request: Request):
     if fail is not None:
         return fail
     f, t, label = _qparams(request)
-    return {"window": label, "rows": q_extras_agents(f, t, _acct(request))}
+    return {"window": label, "rows": q_extras_agents(f, t, _acct(request), _proj(request))}
 
 
 @app.get("/api/extras/slash")
@@ -783,7 +799,7 @@ def api_extras_slash(request: Request):
     if fail is not None:
         return fail
     f, t, label = _qparams(request)
-    return {"window": label, "rows": q_extras_slash(f, t, _acct(request))}
+    return {"window": label, "rows": q_extras_slash(f, t, _acct(request), _proj(request))}
 
 
 @app.get("/api/extras/files")
@@ -793,7 +809,7 @@ def api_extras_files(request: Request):
         return fail
     f, t, label = _qparams(request)
     limit = int(request.query_params.get("limit", "30"))
-    return {"window": label, "rows": q_extras_files(f, t, limit, _acct(request))}
+    return {"window": label, "rows": q_extras_files(f, t, limit, _acct(request), _proj(request))}
 
 
 @app.get("/api/extras/bash")
@@ -803,7 +819,7 @@ def api_extras_bash(request: Request):
         return fail
     f, t, label = _qparams(request)
     limit = int(request.query_params.get("limit", "30"))
-    return {"window": label, "rows": q_extras_bash(f, t, limit, _acct(request))}
+    return {"window": label, "rows": q_extras_bash(f, t, limit, _acct(request), _proj(request))}
 
 
 @app.get("/api/extras/errors")
@@ -812,7 +828,7 @@ def api_extras_errors(request: Request):
     if fail is not None:
         return fail
     f, t, label = _qparams(request)
-    return {"window": label, "rows": q_extras_errors(f, t, _acct(request))}
+    return {"window": label, "rows": q_extras_errors(f, t, _acct(request), _proj(request))}
 
 
 @app.get("/api/extras/calls")
@@ -828,7 +844,7 @@ def api_extras_calls(request: Request):
     offset = max(0, int(q.get("offset", "0")))
     return {
         "window": label, "limit": limit, "offset": offset,
-        **q_extras_calls(f, t, tool, status, limit, offset, _acct(request)),
+        **q_extras_calls(f, t, tool, status, limit, offset, _acct(request), _proj(request)),
     }
 
 

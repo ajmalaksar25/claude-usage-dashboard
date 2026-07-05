@@ -158,6 +158,55 @@ main {
   max-width: 1480px; margin: 0 auto;
 }
 
+/* ---------- tabs ---------- */
+.tabs { display: flex; align-items: center; gap: 6px; margin: 2px 0 0; }
+.tabs button[data-tab] {
+  background: transparent; color: var(--muted); border: 1px solid transparent;
+  padding: 7px 14px; border-radius: 999px; cursor: pointer;
+  font: inherit; font-size: 12.5px; font-weight: 500;
+  transition: color 160ms var(--ease-out), background 160ms var(--ease-out), border-color 160ms var(--ease-out);
+}
+.tabs button[data-tab]:hover { color: var(--text); border-color: var(--border-soft); }
+.tabs button[data-tab].on { background: var(--text); color: var(--bg); box-shadow: 0 1px 2px rgba(31,30,27,.18); }
+.tabs button[hidden] { display: none; }
+
+/* Project cross-filter pill */
+.proj-pill {
+  margin-left: auto;
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--accent-soft); color: var(--accent-text);
+  border: 1px solid rgba(217,119,87,.35); border-radius: 999px;
+  padding: 6px 12px; font: inherit; font-size: 12px; font-weight: 500; cursor: pointer;
+  transition: background 140ms var(--ease-out), transform 120ms var(--ease-out);
+}
+.proj-pill::before { content: "project:"; color: var(--accent-2); font-weight: 400; }
+.proj-pill .x { font-size: 10px; opacity: .7; }
+.proj-pill:hover { background: rgba(217,119,87,.2); }
+.proj-pill:active { transform: scale(0.97); }
+.proj-pill[hidden] { display: none; }
+
+/* Tab routing — sections carry data-tab; extras-root is the activity tab */
+main[data-tab="overview"] section[data-tab]:not([data-tab="overview"]) { display: none; }
+main[data-tab="sessions"] section[data-tab]:not([data-tab="sessions"]) { display: none; }
+main[data-tab="activity"] section[data-tab] { display: none; }
+main:not([data-tab="activity"]) #extras-root { display: none !important; }
+/* The activity tab chip replaces the old inline divider heading */
+main #extras-root .extras-divider { display: none; }
+
+/* Clickable project cells (cross-filter) */
+.project-cell.clickable { cursor: pointer; }
+.project-cell.clickable:hover .name { color: var(--accent-text); text-decoration: underline; text-decoration-color: var(--accent-glow); text-underline-offset: 2px; }
+
+/* Accounts button — overlapping profile dots */
+.accounts-btn { display: inline-flex; align-items: center; gap: 8px; }
+.acct-dots { display: inline-flex; align-items: center; }
+.acct-dots i {
+  width: 13px; height: 13px; border-radius: 999px; display: block;
+  border: 1.5px solid var(--panel);
+}
+.acct-dots i:first-child { background: var(--accent); z-index: 1; }
+.acct-dots i:last-child { background: var(--panel-3); margin-left: -6px; }
+
 /* ---------- KPI grid ---------- */
 .kpi-row {
   display: grid; gap: 12px;
