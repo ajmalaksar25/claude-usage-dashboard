@@ -25,7 +25,7 @@ Chart.defaults.borderColor = getCSS("--border");
 Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
 Chart.defaults.font.size = 11;
 Chart.defaults.plugins.legend.labels.color = getCSS("--text");
-Chart.defaults.plugins.tooltip.backgroundColor = "#0d0f12";
+Chart.defaults.plugins.tooltip.backgroundColor = getCSS("--panel");
 Chart.defaults.plugins.tooltip.borderColor = getCSS("--border");
 Chart.defaults.plugins.tooltip.borderWidth = 1;
 Chart.defaults.plugins.tooltip.titleColor = getCSS("--text");
@@ -181,8 +181,8 @@ async function loadTimeline() {
       responsive: true, maintainAspectRatio: false,
       interaction: { mode: "index", intersect: false },
       scales: {
-        x: { stacked: true, grid: { color: "rgba(255,255,255,.04)" }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 12 } },
-        y: { stacked: true, grid: { color: "rgba(255,255,255,.04)" }, ticks: { callback: v => fmtCompact(v) } },
+        x: { stacked: true, grid: { color: getCSS("--grid") }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 12 } },
+        y: { stacked: true, grid: { color: getCSS("--grid") }, ticks: { callback: v => fmtCompact(v) } },
         y2: { display: STATE.showCost, position: "right", grid: { drawOnChartArea: false }, ticks: { callback: v => "$"+fmtCompact(v) } },
       },
       plugins: {
@@ -229,7 +229,7 @@ async function loadHeatmap() {
 
   // Color stops — dynamic so short windows still get a full range
   const max = days.reduce((m, d) => Math.max(m, d.tokens || 0), 0);
-  const colors = ["#181c22", "#3b261a", "#5a341e", "#9c4d23", "#c46938", "#e07a4f"];
+  const colors = ["#efece1", "#f4d9c5", "#ecb08e", "#dd8a5e", "#c96540", "#a94d2d"];
   const colorFor = v => {
     if (!v) return colors[0];
     if (max <= 1) return colors[1];
@@ -421,7 +421,7 @@ async function loadProjects() {
     options: {
       indexAxis: "y", responsive: true, maintainAspectRatio: false,
       scales: {
-        x: { grid: { color: "rgba(255,255,255,.04)" }, ticks: { callback: v => STATE.projBy === "cost" ? "$"+fmtCompact(v) : fmtCompact(v) } },
+        x: { grid: { color: getCSS("--grid") }, ticks: { callback: v => STATE.projBy === "cost" ? "$"+fmtCompact(v) : fmtCompact(v) } },
         y: { grid: { display: false } },
       },
       plugins: {
@@ -448,7 +448,7 @@ async function loadDistributions() {
     data: { labels: hourLabels, datasets: [{ label: "tokens", data: hours, backgroundColor: alpha(COLORS[1], .85), borderWidth: 0 }] },
     options: {
       responsive: true, maintainAspectRatio: false,
-      scales: { x: { grid: { display: false } }, y: { grid: { color: "rgba(255,255,255,.04)" }, ticks: { callback: v => fmtCompact(v) } } },
+      scales: { x: { grid: { display: false } }, y: { grid: { color: getCSS("--grid") }, ticks: { callback: v => fmtCompact(v) } } },
       plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => fmtCompact(ctx.parsed.y) + " tokens" } } },
     },
   });
@@ -457,7 +457,7 @@ async function loadDistributions() {
     data: { labels: dowLabels, datasets: [{ label: "tokens", data: dows, backgroundColor: alpha(COLORS[2], .85), borderWidth: 0 }] },
     options: {
       responsive: true, maintainAspectRatio: false,
-      scales: { x: { grid: { display: false } }, y: { grid: { color: "rgba(255,255,255,.04)" }, ticks: { callback: v => fmtCompact(v) } } },
+      scales: { x: { grid: { display: false } }, y: { grid: { color: getCSS("--grid") }, ticks: { callback: v => fmtCompact(v) } } },
       plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => fmtCompact(ctx.parsed.y) + " tokens" } } },
     },
   });
@@ -573,7 +573,7 @@ async function loadExtrasSkills() {
     options: {
       indexAxis: "y", responsive: true, maintainAspectRatio: false,
       scales: {
-        x: { grid: { color: "rgba(255,255,255,.04)" }, ticks: { precision: 0 } },
+        x: { grid: { color: getCSS("--grid") }, ticks: { precision: 0 } },
         y: { grid: { display: false } },
       },
       plugins: {
@@ -595,7 +595,7 @@ async function loadExtrasTools() {
               backgroundColor: alpha(COLORS[1], .85), borderWidth: 0 }] },
     options: {
       indexAxis: "y", responsive: true, maintainAspectRatio: false,
-      scales: { x: { grid: { color: "rgba(255,255,255,.04)" }, ticks: { callback: v=>fmtCompact(v) } },
+      scales: { x: { grid: { color: getCSS("--grid") }, ticks: { callback: v=>fmtCompact(v) } },
                 y: { grid: { display: false } } },
       plugins: { legend: { display: false }, tooltip: {
         callbacks: { label: ctx => {
@@ -616,7 +616,7 @@ async function loadExtrasMcp() {
               backgroundColor: alpha(COLORS[2], .85), borderWidth: 0 }] },
     options: {
       indexAxis: "y", responsive: true, maintainAspectRatio: false,
-      scales: { x: { grid: { color: "rgba(255,255,255,.04)" }, ticks: { precision: 0 } },
+      scales: { x: { grid: { color: getCSS("--grid") }, ticks: { precision: 0 } },
                 y: { grid: { display: false } } },
       plugins: { legend: { display: false } },
     },
@@ -659,7 +659,7 @@ async function loadExtrasBash() {
               backgroundColor: alpha(COLORS[4], .85), borderWidth: 0 }] },
     options: {
       indexAxis: "y", responsive: true, maintainAspectRatio: false,
-      scales: { x: { grid: { color: "rgba(255,255,255,.04)" }, ticks: { precision: 0 } },
+      scales: { x: { grid: { color: getCSS("--grid") }, ticks: { precision: 0 } },
                 y: { grid: { display: false } } },
       plugins: { legend: { display: false } },
     },
