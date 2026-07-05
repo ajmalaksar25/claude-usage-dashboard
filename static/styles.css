@@ -396,6 +396,72 @@ dialog#gmail-dialog:not([open])::backdrop { opacity: 0; }
 #gmail-dlg-body .ok  { color: var(--good); }
 #gmail-dlg-body .err { color: var(--bad); }
 
+/* ---------- Profiles dialog (account manager) ---------- */
+dialog#profiles-dialog {
+  background: var(--panel); color: var(--text); border: 1px solid var(--border);
+  border-radius: var(--r-xl); padding: 0; width: min(680px, 94vw); max-width: 96vw;
+  box-shadow: 0 30px 80px rgba(31,30,27,.22);
+}
+dialog#profiles-dialog::backdrop { background: rgba(31,30,27,.32); backdrop-filter: blur(3px); }
+#profiles-dlg-body { padding: 16px 18px 18px; font-size: 13px; max-height: 74vh; overflow: auto; }
+.profiles-shared { color: var(--text-2); font-size: 12.5px; line-height: 1.5; margin-bottom: 14px; }
+.profiles-shared code {
+  background: var(--panel-2); border: 1px solid var(--border-soft); padding: 1px 6px;
+  border-radius: 4px; font-size: 11px; font-family: var(--font-mono);
+}
+.profiles-shared button,
+.profiles-new button {
+  background: var(--text); color: var(--bg); border: 0; padding: 7px 12px; border-radius: 8px;
+  font: inherit; font-size: 12px; cursor: pointer; margin-left: 6px;
+  transition: filter 140ms var(--ease-out), transform 120ms var(--ease-out);
+}
+.profiles-shared button:hover, .profiles-new button:hover { filter: brightness(1.25); }
+.profiles-shared button:active, .profiles-new button:active { transform: scale(0.97); }
+.profiles-list { display: grid; gap: 10px; }
+.profile-card {
+  background: var(--bg); border: 1px solid var(--border-soft); border-radius: var(--r-md);
+  padding: 12px 14px; display: flex; flex-direction: column; gap: 5px;
+}
+.profile-card .p-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.profile-card .p-name { font-family: var(--font-display); font-size: 16px; font-weight: 600; }
+.profile-card .p-cred {
+  font-size: 10.5px; padding: 2px 8px; border-radius: 999px;
+  color: var(--muted); background: var(--panel-2); border: 1px solid var(--border-soft);
+}
+.profile-card .p-cred.ok { color: var(--good); background: rgba(93,138,82,.10); border-color: rgba(93,138,82,.30); }
+.profile-card .p-path { font-family: var(--font-mono); font-size: 10.5px; color: var(--muted-2); word-break: break-all; }
+.profile-card .p-usage { font-size: 12px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.profile-card .p-meta { font-size: 11px; color: var(--muted); }
+.profile-card .p-chips { display: flex; gap: 5px; flex-wrap: wrap; }
+.p-chip {
+  font-family: var(--font-mono); font-size: 10px; padding: 2px 7px; border-radius: 4px;
+  border: 1px solid var(--border-soft); color: var(--muted);
+}
+.p-chip.ok   { color: var(--good); border-color: rgba(93,138,82,.35); background: rgba(93,138,82,.07); }
+.p-chip.warn { color: var(--accent-text); border-color: rgba(217,119,87,.35); background: var(--accent-soft); }
+.profile-card .p-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.profile-card .p-actions button {
+  background: var(--panel); color: var(--text); border: 1px solid var(--border-soft);
+  padding: 5px 10px; border-radius: 6px; font: inherit; font-size: 11px; cursor: pointer;
+  transition: border-color 140ms var(--ease-out), transform 120ms var(--ease-out);
+}
+.profile-card .p-actions button:hover { border-color: var(--text); }
+.profile-card .p-actions button:active { transform: scale(0.97); }
+.profiles-new { display: flex; gap: 8px; margin-top: 14px; }
+.profiles-new input {
+  flex: 1; background: var(--panel); color: var(--text);
+  border: 1px solid var(--border-soft); border-radius: 8px;
+  font: inherit; font-size: 12.5px; padding: 7px 10px;
+}
+.profiles-new input::placeholder { color: var(--muted-2); }
+.profiles-log {
+  margin: 12px 0 0; padding: 10px 12px; max-height: 160px; overflow: auto;
+  background: var(--panel-2); border: 1px solid var(--border-soft); border-radius: 8px;
+  font-family: var(--font-mono); font-size: 11px; line-height: 1.5; color: var(--text-2);
+  white-space: pre-wrap; word-break: break-word;
+}
+.profiles-log[hidden] { display: none; }
+
 /* ---------- Stagger entrance ---------- */
 main > section {
   opacity: 0; transform: translateY(8px);

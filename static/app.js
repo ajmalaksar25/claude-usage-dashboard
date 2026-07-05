@@ -907,6 +907,107 @@ function bindGmail() {
   });
 }
 
+// ---------- Profiles (account manager) ----------
+
+function profileCard(p, sharedExists, sharedDirs) {
+  const chips = sharedDirs.map(d => {
+    const s = p.shared[d] || "missing";
+    const cls = s === "linked" ? "ok" : (s === "real-dir" ? "warn" : "off");
+    return `<span class="p-chip ${cls}" title="${escapeHtml(d)}: ${escapeHtml(s)}">${escapeHtml(d)}</span>`;
+  }).join("");
+  const usage = p.usage
+    ? `${fmtInt(p.usage.msgs)} msgs · ${fmtCompact(p.usage.tokens)} tokens · ${fmtMoney(p.usage.cost)} at API rates`
+    : "not indexed yet — Refresh to pick it up";
+  const needsLink = sharedExists && p.linked < sharedDirs.length;
+  return `
+    <div class="profile-card" data-name="${escapeHtml(p.name)}">
+      <div class="p-head">
+        <span class="p-name">${escapeHtml(p.name)}</span>
+        <span class="p-cred ${p.credentials ? "ok" : ""}">${p.credentials ? "signed in" : "no credentials"}</span>
+      </div>
+      <div class="p-path">${escapeHtml(p.path)}</div>
+      <div class="p-usage">${usage}</div>
+      <div class="p-meta">${fmtInt(p.sessions)} session dir${p.sessions === 1 ? "" : "s"} · shared ${p.linked}/${sharedDirs.length}</div>
+      <div class="p-chips">${chips}</div>
+      <div class="p-actions">
+        ${needsLink ? `<button data-act="link">Link shared resources</button>` : ""}
+        <button data-act="copy-zsh" data-alias="${escapeHtml(p.alias.zsh)}">Copy alias (zsh)</button>
+        <button data-act="copy-ps" data-alias="${escapeHtml(p.alias.powershell)}">Copy alias (PowerShell)</button>
+      </div>
+    </div>`;
+}
+
+function profilesLog(text) {
+  const log = document.getElementById("profiles-log");
+  if (!text) { log.hidden = true; return; }
+  log.hidden = false;
+  log.textContent = text;
+}
+
+async function profilesAction(promise) {
+  let r;
+  try { r = await promise; } catch (e) { profilesLog(String(e)); return; }
+  profilesLog(r.output || (r.ok ? "done" : "failed"));
+  await renderProfiles();
+}
+
+async function renderProfiles() {
+  const sharedEl = document.getElementById("profiles-shared");
+  const list = document.getElementById("profiles-list");
+  let j;
+  try { j = await api("/api/profiles"); }
+  catch { list.innerHTML = `<div class="muted">could not load accounts</div>`; return; }
+
+  sharedEl.innerHTML = j.shared_exists
+    ? `Shared resources live in <code>${escapeHtml(j.shared_root)}</code> — every linked account sees the same ${j.shared_dirs.join(", ")}.`
+    : `Shared skills/agents/commands/rules are not set up yet.
+       <button id="init-shared-btn">Move them out of “default” and share</button>`;
+  list.innerHTML = j.profiles.map(p => profileCard(p, j.shared_exists, j.shared_dirs)).join("")
+    || `<div class="muted">no Claude config dirs found in your home directory</div>`;
+
+  const initBtn = document.getElementById("init-shared-btn");
+  if (initBtn) initBtn.addEventListener("click", () => {
+    if (!confirm("This moves skills, agents, commands, and rules out of ~/.claude into ~/.claude-shared and leaves links behind. Claude Code keeps working; the dirs just become shared. Continue?")) return;
+    profilesAction(fetch("/api/profiles/init_shared?from=default", { method: "POST" }).then(r => r.json()));
+  });
+  list.querySelectorAll(".profile-card button[data-act]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const name = btn.closest(".profile-card").dataset.name;
+      const act = btn.dataset.act;
+      if (act === "link") {
+        profilesAction(fetch(`/api/profiles/link?name=${encodeURIComponent(name)}`, { method: "POST" }).then(r => r.json()));
+      } else {
+        try {
+          await navigator.clipboard.writeText(btn.dataset.alias);
+          const prev = btn.textContent; btn.textContent = "Copied";
+          setTimeout(() => { btn.textContent = prev; }, 1200);
+        } catch { profilesLog(btn.dataset.alias); }
+      }
+    });
+  });
+}
+
+function bindProfiles() {
+  const dlg = document.getElementById("profiles-dialog");
+  document.getElementById("profiles-btn").addEventListener("click", () => {
+    profilesLog(null);
+    dlg.showModal();
+    renderProfiles();
+  });
+  dlg.addEventListener("click", e => {
+    if (e.target.matches("[data-close]") || e.target.id === "profiles-dialog") dlg.close();
+  });
+  document.getElementById("profile-create").addEventListener("click", () => {
+    const input = document.getElementById("profile-new-name");
+    const name = input.value.trim();
+    if (!name) { input.focus(); return; }
+    profilesAction(fetch(`/api/profiles/create?name=${encodeURIComponent(name)}`, { method: "POST" }).then(r => r.json()))
+      .then(() => { input.value = ""; loadAccounts(); });
+  });
+  // Deep link: /#accounts opens the manager
+  if (location.hash === "#accounts") { dlg.showModal(); renderProfiles(); }
+}
+
 function bindSkillsSeg() {
   const seg = document.getElementById("skills-seg");
   if (!seg) return;
@@ -944,6 +1045,7 @@ bindSessSeg();
 bindRefresh();
 bindCostToggle();
 bindGmail();
+bindProfiles();
 bindSkillsSeg();
 bindCallsControls();
 

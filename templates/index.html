@@ -46,6 +46,7 @@
         <button data-mode="full">Full report<span class="muted"> · everything</span></button>
       </div>
     </div>
+    <button id="profiles-btn" title="See and manage Claude accounts on this machine">◉ Accounts</button>
     <button id="refresh" title="Re-index .jsonl files">↻ Refresh</button>
     <button id="gmail-btn" title="Connect Gmail to auto-pull Anthropic receipts">✉ Connect Gmail</button>
   </div>
@@ -54,6 +55,20 @@
 <dialog id="gmail-dialog">
   <div class="dlg-head"><h3 id="gmail-dlg-title">Connect Gmail</h3><button class="dlg-close" data-close>×</button></div>
   <div id="gmail-dlg-body"></div>
+</dialog>
+
+<dialog id="profiles-dialog">
+  <div class="dlg-head"><h3>Claude accounts on this machine</h3><button class="dlg-close" data-close>×</button></div>
+  <div id="profiles-dlg-body">
+    <div id="profiles-shared" class="profiles-shared"></div>
+    <div id="profiles-list" class="profiles-list"></div>
+    <div class="profiles-new">
+      <input id="profile-new-name" type="text" placeholder="new account name, e.g. personal" maxlength="32"
+             spellcheck="false" autocomplete="off" />
+      <button id="profile-create">Create account</button>
+    </div>
+    <pre id="profiles-log" class="profiles-log" hidden></pre>
+  </div>
 </dialog>
 
 <main>

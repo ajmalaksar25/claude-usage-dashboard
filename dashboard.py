@@ -5,7 +5,9 @@ Endpoints all accept ?window=all|1y|6m|3m|1m|15d|1w|today (or explicit
 """
 from __future__ import annotations
 
+import re
 import sqlite3
+import subprocess
 import sys
 import threading
 import webbrowser
@@ -20,6 +22,7 @@ from fastapi.templating import Jinja2Templates
 
 from billing import subscription_cost
 from indexer import reindex
+import ccm
 import gmail_scraper
 
 ROOT = Path(__file__).parent
@@ -616,6 +619,90 @@ def api_accounts():
     except sqlite3.OperationalError:
         return {"accounts": []}
     return {"accounts": [dict(r) for r in rows]}
+
+
+# ---------- profile manager (ccm) ----------
+
+_PROFILE_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$")
+
+
+def _run_ccm(*args: str) -> dict:
+    """Run a ccm.py subcommand; return exit code and transcript."""
+    proc = subprocess.run(
+        [sys.executable, str(ROOT / "ccm.py"), *args],
+        capture_output=True, text=True, timeout=60,
+    )
+    out = (proc.stdout or "") + (("\n" + proc.stderr) if proc.stderr else "")
+    return {"ok": proc.returncode == 0, "exit_code": proc.returncode, "output": out.strip()}
+
+
+@app.get("/api/profiles")
+def api_profiles():
+    """Every Claude config profile on this machine, with link + usage status."""
+    usage: dict[str, dict] = {}
+    if DB_PATH.exists():
+        try:
+            with _conn() as c:
+                for r in c.execute(
+                    "SELECT account, COUNT(*) AS msgs, "
+                    "COALESCE(SUM(input_tokens+output_tokens+cache_5m_write+cache_1h_write+cache_read),0) AS tokens, "
+                    "COALESCE(SUM(cost_usd),0) AS cost "
+                    "FROM messages GROUP BY account"
+                ):
+                    usage[r["account"]] = {
+                        "msgs": r["msgs"], "tokens": r["tokens"],
+                        "cost": round(r["cost"], 2),
+                    }
+        except sqlite3.OperationalError:
+            pass
+    profiles = []
+    for name, path in ccm.discover_profiles():
+        shared = {d: ccm.dir_status(path, d) for d in ccm.SHARED_DIRS}
+        profiles.append({
+            "name": name,
+            "path": str(path),
+            "credentials": (path / ".credentials.json").exists(),
+            "sessions": ccm.session_count(path),
+            "shared": shared,
+            "linked": sum(1 for s in shared.values() if s == "linked"),
+            "alias": {
+                "zsh": ccm.alias_lines(name, "zsh"),
+                "powershell": ccm.alias_lines(name, "powershell"),
+            },
+            "usage": usage.get(name),
+        })
+    shared_root = ccm.shared_home()
+    return {
+        "profiles": profiles,
+        "shared_root": str(shared_root),
+        "shared_exists": shared_root.is_dir(),
+        "shared_dirs": list(ccm.SHARED_DIRS),
+    }
+
+
+@app.post("/api/profiles/create")
+def api_profiles_create(request: Request):
+    name = (request.query_params.get("name") or "").strip()
+    if not _PROFILE_NAME_RE.match(name) or name in ("default", "shared"):
+        return JSONResponse({"ok": False, "output": f"invalid profile name: {name!r}"}, status_code=400)
+    return _run_ccm("create", name)
+
+
+@app.post("/api/profiles/link")
+def api_profiles_link(request: Request):
+    name = (request.query_params.get("name") or "").strip()
+    if name != "default" and not _PROFILE_NAME_RE.match(name):
+        return JSONResponse({"ok": False, "output": f"invalid profile name: {name!r}"}, status_code=400)
+    return _run_ccm("link", name)
+
+
+@app.post("/api/profiles/init_shared")
+def api_profiles_init_shared(request: Request):
+    frm = (request.query_params.get("from") or "").strip()
+    if frm and frm != "default" and not _PROFILE_NAME_RE.match(frm):
+        return JSONResponse({"ok": False, "output": f"invalid profile name: {frm!r}"}, status_code=400)
+    args = ["init-shared"] + (["--from-profile", frm] if frm else [])
+    return _run_ccm(*args)
 
 
 @app.post("/refresh")
