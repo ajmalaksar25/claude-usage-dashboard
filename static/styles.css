@@ -412,6 +412,20 @@ main > section:nth-child(8) { animation-delay: 240ms; }
 }
 #extras-root .extras-kpis .kpi { background: var(--panel); }
 
+/* Account switcher (hidden unless >1 account indexed) */
+.windows.accounts button.on {
+  background: var(--panel-3);
+  color: var(--text);
+  box-shadow: 0 1px 0 rgba(255,255,255,.06) inset;
+}
+
+/* Hero KPI — API-equivalent spend */
+.kpi.hero {
+  border-color: rgba(217,119,87,.45);
+  background: linear-gradient(180deg, rgba(217,119,87,.10), transparent 70%);
+}
+.kpi.hero .v { color: var(--chart-1); }
+
 /* Tool call log */
 .calls-controls { display: flex; align-items: center; gap: 10px; }
 .calls-controls select {

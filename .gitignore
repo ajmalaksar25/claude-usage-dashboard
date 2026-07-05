@@ -4,6 +4,7 @@ usage.db-wal
 usage.db-shm
 
 # Per-user secrets and personal data — never commit
+accounts.json
 billing.json
 credentials.json
 token.json

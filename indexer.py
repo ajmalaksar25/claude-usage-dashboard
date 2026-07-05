@@ -22,7 +22,8 @@ from pathlib import Path
 from pricing import cost_for_model
 
 CLAUDE_PROJECTS = Path.home() / ".claude" / "projects"
-SCHEMA_VERSION = "2"
+ACCOUNTS_FILE = Path(__file__).parent / "accounts.json"
+SCHEMA_VERSION = "3"
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS messages (
@@ -41,8 +42,10 @@ CREATE TABLE IF NOT EXISTS messages (
   cache_5m_write  INTEGER,
   cache_1h_write  INTEGER,
   cache_read      INTEGER,
-  cost_usd        REAL
+  cost_usd        REAL,
+  account         TEXT DEFAULT 'default'
 );
+CREATE INDEX IF NOT EXISTS idx_messages_account   ON messages(account);
 CREATE INDEX IF NOT EXISTS idx_messages_ts        ON messages(ts);
 CREATE INDEX IF NOT EXISTS idx_messages_day       ON messages(ts_day);
 CREATE INDEX IF NOT EXISTS idx_messages_project   ON messages(project, ts);
@@ -75,8 +78,10 @@ CREATE TABLE IF NOT EXISTS tool_calls (
   subagent_type   TEXT,
   target_path     TEXT,
   command_verb    TEXT,
-  is_error        INTEGER DEFAULT 0
+  is_error        INTEGER DEFAULT 0,
+  account         TEXT DEFAULT 'default'
 );
+CREATE INDEX IF NOT EXISTS idx_tc_account  ON tool_calls(account);
 CREATE INDEX IF NOT EXISTS idx_tc_ts       ON tool_calls(ts);
 CREATE INDEX IF NOT EXISTS idx_tc_day      ON tool_calls(ts_day);
 CREATE INDEX IF NOT EXISTS idx_tc_name     ON tool_calls(tool_name);
@@ -92,8 +97,10 @@ CREATE TABLE IF NOT EXISTS slash_prompts (
   ts_day          TEXT NOT NULL,
   session_id      TEXT,
   project         TEXT,
-  command         TEXT NOT NULL
+  command         TEXT NOT NULL,
+  account         TEXT DEFAULT 'default'
 );
+CREATE INDEX IF NOT EXISTS idx_sp_account ON slash_prompts(account);
 CREATE INDEX IF NOT EXISTS idx_sp_ts      ON slash_prompts(ts);
 CREATE INDEX IF NOT EXISTS idx_sp_command ON slash_prompts(command);
 
@@ -114,13 +121,54 @@ _CMD_TAG_RE = re.compile(r"<command-name>\s*([^<\s][^<]*?)\s*</command-name>", r
 _BASH_SKIP = {"cd", "set", "export", "&&", "||", ";", "|", "(", "{", "if", "for", "while"}
 
 
+def _ensure_account_column(conn: sqlite3.Connection, table: str) -> None:
+    """Migrate a pre-v3 table: add the account column, backfill 'default'."""
+    cols = [r[1] for r in conn.execute(f"PRAGMA table_info({table})")]
+    if cols and "account" not in cols:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN account TEXT DEFAULT 'default'")
+        conn.execute(f"UPDATE {table} SET account='default' WHERE account IS NULL")
+
+
+def discover_accounts() -> list[dict]:
+    """Return [{'name': str, 'root': Path}] of Claude config dirs to index.
+
+    accounts.json next to this file wins if present:
+      [{"name": "work", "root": "~/.claude-work/projects"}, ...]
+    Otherwise scan the home dir for ~/.claude*/projects (covers the common
+    CLAUDE_CONFIG_DIR=~/.claude-work multi-account convention).
+    """
+    if ACCOUNTS_FILE.exists():
+        try:
+            data = json.loads(ACCOUNTS_FILE.read_text(encoding="utf-8"))
+            out = []
+            for a in data:
+                root = Path(a["root"]).expanduser()
+                if root.is_dir():
+                    out.append({"name": str(a["name"]), "root": root})
+            if out:
+                return out
+        except Exception as e:
+            print(f"[indexer] ignoring bad accounts.json: {e}", file=sys.stderr)
+    out = []
+    for d in sorted(Path.home().glob(".claude*")):
+        proj = d / "projects"
+        if not proj.is_dir():
+            continue
+        name = d.name[len(".claude"):].lstrip("-_.") or "default"
+        out.append({"name": name, "root": proj})
+    return out or [{"name": "default", "root": CLAUDE_PROJECTS}]
+
+
 def open_db(db_path: Path, extras: bool = False) -> sqlite3.Connection:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(db_path))
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
+    _ensure_account_column(conn, "messages")
     conn.executescript(SCHEMA_SQL)
     if extras:
+        _ensure_account_column(conn, "tool_calls")
+        _ensure_account_column(conn, "slash_prompts")
         conn.executescript(EXTRAS_SCHEMA_SQL)
     conn.execute(
         "INSERT INTO meta(k,v) VALUES('schema_version', ?) "
@@ -365,6 +413,7 @@ def _process_file(
     conn: sqlite3.Connection,
     jf: Path,
     root: Path,
+    account: str = "default",
     do_messages: bool = True,
     do_extras: bool = False,
 ) -> tuple[int, int]:
@@ -401,17 +450,24 @@ def _process_file(
     msgs_inserted = 0
     extras_inserted = 0
 
+    for r in msg_rows:
+        r["account"] = account
+    for r in tool_rows:
+        r["account"] = account
+    for r in slash_rows:
+        r["account"] = account
+
     if do_messages and msg_rows:
         cur.executemany(
             """
             INSERT INTO messages
               (msg_id, ts, ts_day, ts_hour, ts_dow, session_id, project, project_path,
                model, tier, input_tokens, output_tokens, cache_5m_write, cache_1h_write,
-               cache_read, cost_usd)
+               cache_read, cost_usd, account)
             VALUES
               (:msg_id, :ts, :ts_day, :ts_hour, :ts_dow, :session_id, :project, :project_path,
                :model, :tier, :input_tokens, :output_tokens, :cache_5m_write, :cache_1h_write,
-               :cache_read, :cost_usd)
+               :cache_read, :cost_usd, :account)
             ON CONFLICT(msg_id) DO NOTHING
             """,
             msg_rows,
@@ -428,11 +484,11 @@ def _process_file(
                 INSERT INTO tool_calls
                   (tool_use_id, msg_id, ts, ts_day, session_id, project, project_path,
                    tool_name, mcp_server, skill, subagent_type, target_path,
-                   command_verb, is_error)
+                   command_verb, is_error, account)
                 VALUES
                   (:tool_use_id, :msg_id, :ts, :ts_day, :session_id, :project, :project_path,
                    :tool_name, :mcp_server, :skill, :subagent_type, :target_path,
-                   :command_verb, :is_error)
+                   :command_verb, :is_error, :account)
                 ON CONFLICT(tool_use_id) DO UPDATE SET
                   is_error      = excluded.is_error,
                   skill         = excluded.skill,
@@ -448,9 +504,9 @@ def _process_file(
             cur.executemany(
                 """
                 INSERT INTO slash_prompts
-                  (prompt_id, ts, ts_day, session_id, project, command)
+                  (prompt_id, ts, ts_day, session_id, project, command, account)
                 VALUES
-                  (:prompt_id, :ts, :ts_day, :session_id, :project, :command)
+                  (:prompt_id, :ts, :ts_day, :session_id, :project, :command, :account)
                 ON CONFLICT(prompt_id) DO NOTHING
                 """,
                 slash_rows,
@@ -470,12 +526,21 @@ def _iter_jsonl(root: Path):
 
 def reindex(
     db_path: Path,
-    root: Path = CLAUDE_PROJECTS,
+    root: Path | None = None,
     force: bool = False,
     extras: bool = False,
     verbose: bool = True,
+    accounts: list[dict] | None = None,
 ) -> dict:
-    """Walk root, ingest changed/new .jsonl files. Returns summary dict."""
+    """Walk each account root, ingest changed/new .jsonl files. Returns summary.
+
+    Explicit `root` pins a single 'default' account (old behaviour); otherwise
+    accounts come from accounts.json / ~/.claude* discovery.
+    """
+    if accounts is None:
+        accounts = (
+            [{"name": "default", "root": root}] if root is not None else discover_accounts()
+        )
     conn = open_db(db_path, extras=extras)
     cur = conn.cursor()
     cur.execute("SELECT path, size, mtime_ns FROM files")
@@ -489,49 +554,56 @@ def reindex(
     msgs_inserted = extras_inserted = 0
     now_iso = datetime.now(timezone.utc).isoformat()
 
-    for jf in _iter_jsonl(root):
-        files_total += 1
-        try:
-            st = jf.stat()
-        except FileNotFoundError:
-            continue
-        key = str(jf)
-        prev = seen.get(key)
-        prev_extras = seen_extras.get(key) if extras else None
+    for acct in accounts:
+        acct_name, acct_root = acct["name"], Path(acct["root"])
+        if verbose and len(accounts) > 1:
+            print(f"[indexer] account '{acct_name}': {acct_root}")
+        for jf in _iter_jsonl(acct_root):
+            files_total += 1
+            try:
+                st = jf.stat()
+            except FileNotFoundError:
+                continue
+            key = str(jf)
+            prev = seen.get(key)
+            prev_extras = seen_extras.get(key) if extras else None
 
-        do_messages = force or prev != (st.st_size, st.st_mtime_ns)
-        do_extras = bool(extras) and (force or prev_extras != (st.st_size, st.st_mtime_ns))
-        if not (do_messages or do_extras):
-            continue
-        files_touched += 1
-        try:
-            mi, ei = _process_file(conn, jf, root, do_messages=do_messages, do_extras=do_extras)
-        except Exception as e:
-            if verbose:
-                print(f"[indexer] error in {jf}: {e}", file=sys.stderr)
-            continue
-        msgs_inserted += mi
-        extras_inserted += ei
-        if do_messages:
-            cur.execute(
-                "INSERT INTO files(path,size,mtime_ns,rows,last_seen) VALUES(?,?,?,?,?) "
-                "ON CONFLICT(path) DO UPDATE SET size=excluded.size, mtime_ns=excluded.mtime_ns, "
-                "rows=excluded.rows, last_seen=excluded.last_seen",
-                (key, st.st_size, st.st_mtime_ns, mi, now_iso),
-            )
-        if do_extras:
-            cur.execute(
-                "INSERT INTO extras_files(path,size,mtime_ns,rows,last_seen) VALUES(?,?,?,?,?) "
-                "ON CONFLICT(path) DO UPDATE SET size=excluded.size, mtime_ns=excluded.mtime_ns, "
-                "rows=excluded.rows, last_seen=excluded.last_seen",
-                (key, st.st_size, st.st_mtime_ns, ei, now_iso),
-            )
-        if verbose and files_touched % 25 == 0:
-            print(
-                f"[indexer] processed {files_touched} files, "
-                f"+{msgs_inserted} msgs, +{extras_inserted} extras..."
-            )
-        conn.commit()
+            do_messages = force or prev != (st.st_size, st.st_mtime_ns)
+            do_extras = bool(extras) and (force or prev_extras != (st.st_size, st.st_mtime_ns))
+            if not (do_messages or do_extras):
+                continue
+            files_touched += 1
+            try:
+                mi, ei = _process_file(
+                    conn, jf, acct_root, account=acct_name,
+                    do_messages=do_messages, do_extras=do_extras,
+                )
+            except Exception as e:
+                if verbose:
+                    print(f"[indexer] error in {jf}: {e}", file=sys.stderr)
+                continue
+            msgs_inserted += mi
+            extras_inserted += ei
+            if do_messages:
+                cur.execute(
+                    "INSERT INTO files(path,size,mtime_ns,rows,last_seen) VALUES(?,?,?,?,?) "
+                    "ON CONFLICT(path) DO UPDATE SET size=excluded.size, mtime_ns=excluded.mtime_ns, "
+                    "rows=excluded.rows, last_seen=excluded.last_seen",
+                    (key, st.st_size, st.st_mtime_ns, mi, now_iso),
+                )
+            if do_extras:
+                cur.execute(
+                    "INSERT INTO extras_files(path,size,mtime_ns,rows,last_seen) VALUES(?,?,?,?,?) "
+                    "ON CONFLICT(path) DO UPDATE SET size=excluded.size, mtime_ns=excluded.mtime_ns, "
+                    "rows=excluded.rows, last_seen=excluded.last_seen",
+                    (key, st.st_size, st.st_mtime_ns, ei, now_iso),
+                )
+            if verbose and files_touched % 25 == 0:
+                print(
+                    f"[indexer] processed {files_touched} files, "
+                    f"+{msgs_inserted} msgs, +{extras_inserted} extras..."
+                )
+            conn.commit()
 
     cur.execute(
         "INSERT INTO meta(k,v) VALUES('last_index_at', ?) "
@@ -560,6 +632,7 @@ def reindex(
         "rows_total": total_rows,
         "extras_rows_total": extras_rows,
         "extras_enabled": bool(extras),
+        "accounts": [{"name": a["name"], "root": str(a["root"])} for a in accounts],
         "last_index_at": now_iso,
     }
     if verbose:

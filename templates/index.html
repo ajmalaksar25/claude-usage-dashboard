@@ -25,6 +25,7 @@
     </div>
   </div>
   <div class="controls">
+    <div class="windows accounts" id="accounts" hidden></div>
     <div class="windows" id="windows">
       <button data-w="today">Today</button>
       <button data-w="1w">1w</button>
@@ -55,9 +56,9 @@
 <main>
   <!-- KPI cards -->
   <section class="kpi-row">
+    <div class="kpi hero"><div class="k">Would have cost</div><div class="v" id="kpi-api" data-loading="1"></div><div class="sub" id="kpi-api-sub">at standard API rates</div></div>
     <div class="kpi"><div class="k">Total tokens</div>     <div class="v" id="kpi-tokens" data-loading="1"></div><div class="sub" id="kpi-tokens-sub"></div></div>
     <div class="kpi"><div class="k">Messages</div>         <div class="v" id="kpi-msgs"   data-loading="1"></div><div class="sub" id="kpi-msgs-sub"></div></div>
-    <div class="kpi"><div class="k">API cost</div>         <div class="v" id="kpi-api"    data-loading="1"></div><div class="sub" id="kpi-api-sub">at standard API rates</div></div>
     <div class="kpi"><div class="k">Subscription paid</div><div class="v" id="kpi-sub"    data-loading="1"></div><div class="sub" id="kpi-sub-detail"></div></div>
     <div class="kpi savings">
       <div class="k">Saved by subscribing</div>

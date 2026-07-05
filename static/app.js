@@ -34,6 +34,7 @@ Chart.defaults.plugins.tooltip.bodyColor = getCSS("--text");
 // State
 const STATE = {
   window: "all",
+  account: "",         // "" = all accounts; set from the header switcher
   projBy: "tokens",
   sessBy: "tokens",
   showCost: true,
@@ -49,9 +50,40 @@ const charts = {};       // id -> Chart instance
 async function api(path, params={}) {
   const u = new URL(path, location.origin);
   for (const [k,v] of Object.entries(params)) if (v != null) u.searchParams.set(k, v);
+  if (STATE.account && path.startsWith("/api/")) u.searchParams.set("account", STATE.account);
   const r = await fetch(u);
   if (!r.ok) throw new Error(`${path} ${r.status}`);
   return r.json();
+}
+
+// ---------- accounts ----------
+async function loadAccounts() {
+  const box = document.getElementById("accounts");
+  if (!box) return;
+  let accounts = [];
+  try { accounts = (await api("/api/accounts")).accounts || []; } catch {}
+  if (accounts.length < 2) { box.hidden = true; STATE.account = ""; return; }
+  box.innerHTML = "";
+  const mk = (label, value) => {
+    const b = document.createElement("button");
+    b.textContent = label;
+    b.dataset.acct = value;
+    b.classList.toggle("on", STATE.account === value);
+    box.appendChild(b);
+  };
+  mk("All accounts", "");
+  for (const a of accounts) mk(a.name, a.name);
+  box.hidden = false;
+  if (!box.dataset.bound) {
+    box.dataset.bound = "1";
+    box.addEventListener("click", e => {
+      const b = e.target.closest("button[data-acct]");
+      if (!b) return;
+      box.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b));
+      STATE.account = b.dataset.acct;
+      reloadAll();
+    });
+  }
 }
 
 // ---------- KPI ----------
@@ -793,7 +825,7 @@ function bindRefresh() {
   document.getElementById("refresh").addEventListener("click", async (e) => {
     const btn = e.currentTarget;
     btn.disabled = true; btn.textContent = "indexing…";
-    try { await fetch("/refresh", { method: "POST" }); await reloadAll(); }
+    try { await fetch("/refresh", { method: "POST" }); await loadAccounts(); await reloadAll(); }
     finally { btn.disabled = false; btn.textContent = "↻ Refresh"; }
   });
 }
@@ -951,4 +983,4 @@ function bindExport() {
 }
 bindExport();
 
-reloadAll();
+loadAccounts().finally(reloadAll);

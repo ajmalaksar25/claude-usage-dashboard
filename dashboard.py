@@ -76,12 +76,24 @@ def _qparams(req: Request) -> tuple[str, str, str]:
     return _resolve_window(q.get("window"), q.get("from"), q.get("to"))
 
 
+def _acct(req: Request) -> str:
+    """Account filter from ?account=... ('' or 'all' means no filter)."""
+    a = (req.query_params.get("account") or "").strip()
+    return "" if a.lower() == "all" else a
+
+
+def _af(acct: str) -> tuple[str, tuple]:
+    """(SQL fragment, extra params) for an optional account filter."""
+    return (" AND account = ?", (acct,)) if acct else ("", ())
+
+
 # ---------- aggregate queries ----------
 
-def q_summary(frm: str, to: str) -> dict:
+def q_summary(frm: str, to: str, acct: str = "") -> dict:
+    frag, ap = _af(acct)
     with _conn() as c:
         row = c.execute(
-            """
+            f"""
             SELECT
               COUNT(*)                                    AS msgs,
               COUNT(DISTINCT session_id)                  AS sessions,
@@ -95,9 +107,9 @@ def q_summary(frm: str, to: str) -> dict:
               MIN(ts)                                     AS first_ts,
               MAX(ts)                                     AS last_ts
             FROM messages
-            WHERE ts >= ? AND ts < ?
+            WHERE ts >= ? AND ts < ?{frag}
             """,
-            (frm, to),
+            (frm, to, *ap),
         ).fetchone()
     d = dict(row) if row else {}
     d["total_tokens"] = (
@@ -120,10 +132,11 @@ def q_summary(frm: str, to: str) -> dict:
     return d
 
 
-def q_timeseries(frm: str, to: str, bucket: str) -> list[dict]:
+def q_timeseries(frm: str, to: str, bucket: str, acct: str = "") -> list[dict]:
     grp = "ts_day" if bucket == "day" else (
         "substr(ts,1,13)" if bucket == "hour" else "ts_day"
     )
+    frag, ap = _af(acct)
     with _conn() as c:
         rows = c.execute(
             f"""
@@ -136,19 +149,20 @@ def q_timeseries(frm: str, to: str, bucket: str) -> list[dict]:
               COALESCE(SUM(cache_read),0)     AS cache_read,
               COALESCE(SUM(cost_usd),0)       AS cost
             FROM messages
-            WHERE ts >= ? AND ts < ?
+            WHERE ts >= ? AND ts < ?{frag}
             GROUP BY bucket
             ORDER BY bucket
             """,
-            (frm, to),
+            (frm, to, *ap),
         ).fetchall()
     return [dict(r) for r in rows]
 
 
-def q_by_model(frm: str, to: str) -> list[dict]:
+def q_by_model(frm: str, to: str, acct: str = "") -> list[dict]:
+    frag, ap = _af(acct)
     with _conn() as c:
         rows = c.execute(
-            """
+            f"""
             SELECT
               model,
               tier,
@@ -156,19 +170,20 @@ def q_by_model(frm: str, to: str) -> list[dict]:
               COALESCE(SUM(input_tokens+output_tokens+cache_5m_write+cache_1h_write+cache_read),0) AS tokens,
               COALESCE(SUM(cost_usd),0) AS cost
             FROM messages
-            WHERE ts >= ? AND ts < ?
+            WHERE ts >= ? AND ts < ?{frag}
             GROUP BY model, tier
             ORDER BY tokens DESC
             """,
-            (frm, to),
+            (frm, to, *ap),
         ).fetchall()
     return [dict(r) for r in rows]
 
 
-def q_by_project(frm: str, to: str, limit: int) -> list[dict]:
+def q_by_project(frm: str, to: str, limit: int, acct: str = "") -> list[dict]:
+    frag, ap = _af(acct)
     with _conn() as c:
         rows = c.execute(
-            """
+            f"""
             SELECT
               project,
               MAX(project_path) AS project_path,
@@ -178,59 +193,62 @@ def q_by_project(frm: str, to: str, limit: int) -> list[dict]:
               COALESCE(SUM(cost_usd),0) AS cost,
               MAX(ts) AS last_ts
             FROM messages
-            WHERE ts >= ? AND ts < ?
+            WHERE ts >= ? AND ts < ?{frag}
             GROUP BY project
             ORDER BY tokens DESC
             LIMIT ?
             """,
-            (frm, to, limit),
+            (frm, to, *ap, limit),
         ).fetchall()
     return [dict(r) for r in rows]
 
 
-def q_heatmap(frm: str, to: str) -> list[dict]:
+def q_heatmap(frm: str, to: str, acct: str = "") -> list[dict]:
+    frag, ap = _af(acct)
     with _conn() as c:
         rows = c.execute(
-            """
+            f"""
             SELECT
               ts_day AS day,
               COUNT(*) AS msgs,
               COALESCE(SUM(input_tokens+output_tokens+cache_5m_write+cache_1h_write+cache_read),0) AS tokens,
               COALESCE(SUM(cost_usd),0) AS cost
             FROM messages
-            WHERE ts >= ? AND ts < ?
+            WHERE ts >= ? AND ts < ?{frag}
             GROUP BY ts_day
             ORDER BY ts_day
             """,
-            (frm, to),
+            (frm, to, *ap),
         ).fetchall()
     return [dict(r) for r in rows]
 
 
-def q_distributions(frm: str, to: str) -> dict:
+def q_distributions(frm: str, to: str, acct: str = "") -> dict:
+    frag, ap = _af(acct)
     with _conn() as c:
         hours = c.execute(
-            """SELECT ts_hour AS hour, COUNT(*) AS msgs,
+            f"""SELECT ts_hour AS hour, COUNT(*) AS msgs,
                       COALESCE(SUM(input_tokens+output_tokens+cache_5m_write+cache_1h_write+cache_read),0) AS tokens
-               FROM messages WHERE ts >= ? AND ts < ? GROUP BY ts_hour ORDER BY ts_hour""",
-            (frm, to),
+               FROM messages WHERE ts >= ? AND ts < ?{frag} GROUP BY ts_hour ORDER BY ts_hour""",
+            (frm, to, *ap),
         ).fetchall()
         dows = c.execute(
-            """SELECT ts_dow AS dow, COUNT(*) AS msgs,
+            f"""SELECT ts_dow AS dow, COUNT(*) AS msgs,
                       COALESCE(SUM(input_tokens+output_tokens+cache_5m_write+cache_1h_write+cache_read),0) AS tokens
-               FROM messages WHERE ts >= ? AND ts < ? GROUP BY ts_dow ORDER BY ts_dow""",
-            (frm, to),
+               FROM messages WHERE ts >= ? AND ts < ?{frag} GROUP BY ts_dow ORDER BY ts_dow""",
+            (frm, to, *ap),
         ).fetchall()
     return {"hours": [dict(r) for r in hours], "dows": [dict(r) for r in dows]}
 
 
-def q_top_sessions(frm: str, to: str, by: str, limit: int) -> list[dict]:
+def q_top_sessions(frm: str, to: str, by: str, limit: int, acct: str = "") -> list[dict]:
     order_col = {
         "msgs": "msgs",
         "tokens": "tokens",
         "cost": "cost",
         "duration": "duration_minutes",
     }.get(by, "tokens")
+    frag, ap = _af(acct)
     with _conn() as c:
         rows = c.execute(
             f"""
@@ -246,20 +264,21 @@ def q_top_sessions(frm: str, to: str, by: str, limit: int) -> list[dict]:
               MAX(ts) AS last_ts,
               CAST((julianday(MAX(ts)) - julianday(MIN(ts))) * 24 * 60 AS INTEGER) AS duration_minutes
             FROM messages
-            WHERE ts >= ? AND ts < ? AND session_id IS NOT NULL
+            WHERE ts >= ? AND ts < ?{frag} AND session_id IS NOT NULL
             GROUP BY session_id
             ORDER BY {order_col} DESC
             LIMIT ?
             """,
-            (frm, to, limit),
+            (frm, to, *ap, limit),
         ).fetchall()
     return [dict(r) for r in rows]
 
 
-def q_top_days(frm: str, to: str, limit: int) -> list[dict]:
+def q_top_days(frm: str, to: str, limit: int, acct: str = "") -> list[dict]:
+    frag, ap = _af(acct)
     with _conn() as c:
         rows = c.execute(
-            """
+            f"""
             SELECT
               ts_day AS day,
               COUNT(*) AS msgs,
@@ -267,12 +286,12 @@ def q_top_days(frm: str, to: str, limit: int) -> list[dict]:
               COALESCE(SUM(input_tokens+output_tokens+cache_5m_write+cache_1h_write+cache_read),0) AS tokens,
               COALESCE(SUM(cost_usd),0) AS cost
             FROM messages
-            WHERE ts >= ? AND ts < ?
+            WHERE ts >= ? AND ts < ?{frag}
             GROUP BY ts_day
             ORDER BY tokens DESC
             LIMIT ?
             """,
-            (frm, to, limit),
+            (frm, to, *ap, limit),
         ).fetchall()
     return [dict(r) for r in rows]
 
@@ -303,133 +322,141 @@ def _extras_table_present() -> bool:
     return r is not None
 
 
-def q_extras_skills(frm: str, to: str) -> list[dict]:
+def q_extras_skills(frm: str, to: str, acct: str = "") -> list[dict]:
+    frag, ap = _af(acct)
     with _conn() as c:
         rows = c.execute(
-            """
+            f"""
             SELECT skill, COUNT(*) AS uses, MAX(ts) AS last_ts
             FROM tool_calls
-            WHERE ts >= ? AND ts < ? AND skill IS NOT NULL AND skill <> ''
+            WHERE ts >= ? AND ts < ?{frag} AND skill IS NOT NULL AND skill <> ''
             GROUP BY skill
             ORDER BY uses ASC, last_ts ASC
             """,
-            (frm, to),
+            (frm, to, *ap),
         ).fetchall()
     return [dict(r) for r in rows]
 
 
-def q_extras_tools(frm: str, to: str) -> list[dict]:
+def q_extras_tools(frm: str, to: str, acct: str = "") -> list[dict]:
+    frag, ap = _af(acct)
     with _conn() as c:
         rows = c.execute(
-            """
+            f"""
             SELECT tool_name, COUNT(*) AS uses,
                    SUM(is_error) AS errors
             FROM tool_calls
-            WHERE ts >= ? AND ts < ?
+            WHERE ts >= ? AND ts < ?{frag}
             GROUP BY tool_name
             ORDER BY uses DESC
             """,
-            (frm, to),
+            (frm, to, *ap),
         ).fetchall()
     return [dict(r) for r in rows]
 
 
-def q_extras_mcp(frm: str, to: str) -> list[dict]:
+def q_extras_mcp(frm: str, to: str, acct: str = "") -> list[dict]:
+    frag, ap = _af(acct)
     with _conn() as c:
         rows = c.execute(
-            """
+            f"""
             SELECT mcp_server, COUNT(*) AS uses
             FROM tool_calls
-            WHERE ts >= ? AND ts < ? AND mcp_server IS NOT NULL
+            WHERE ts >= ? AND ts < ?{frag} AND mcp_server IS NOT NULL
             GROUP BY mcp_server
             ORDER BY uses DESC
             """,
-            (frm, to),
+            (frm, to, *ap),
         ).fetchall()
     return [dict(r) for r in rows]
 
 
-def q_extras_agents(frm: str, to: str) -> list[dict]:
+def q_extras_agents(frm: str, to: str, acct: str = "") -> list[dict]:
+    frag, ap = _af(acct)
     with _conn() as c:
         rows = c.execute(
-            """
+            f"""
             SELECT subagent_type, COUNT(*) AS uses
             FROM tool_calls
-            WHERE ts >= ? AND ts < ? AND subagent_type IS NOT NULL
+            WHERE ts >= ? AND ts < ?{frag} AND subagent_type IS NOT NULL
             GROUP BY subagent_type
             ORDER BY uses DESC
             """,
-            (frm, to),
+            (frm, to, *ap),
         ).fetchall()
     return [dict(r) for r in rows]
 
 
-def q_extras_slash(frm: str, to: str) -> list[dict]:
+def q_extras_slash(frm: str, to: str, acct: str = "") -> list[dict]:
+    frag, ap = _af(acct)
     with _conn() as c:
         rows = c.execute(
-            """
+            f"""
             SELECT command, COUNT(*) AS uses, MAX(ts) AS last_ts
             FROM slash_prompts
-            WHERE ts >= ? AND ts < ?
+            WHERE ts >= ? AND ts < ?{frag}
             GROUP BY command
             ORDER BY uses DESC
             """,
-            (frm, to),
+            (frm, to, *ap),
         ).fetchall()
     return [dict(r) for r in rows]
 
 
-def q_extras_files(frm: str, to: str, limit: int) -> list[dict]:
+def q_extras_files(frm: str, to: str, limit: int, acct: str = "") -> list[dict]:
+    frag, ap = _af(acct)
     with _conn() as c:
         rows = c.execute(
-            """
+            f"""
             SELECT target_path AS path, COUNT(*) AS edits,
                    SUM(CASE WHEN tool_name='Edit' THEN 1 ELSE 0 END) AS edit_calls,
                    SUM(CASE WHEN tool_name='Write' THEN 1 ELSE 0 END) AS write_calls,
                    SUM(CASE WHEN tool_name='Read' THEN 1 ELSE 0 END) AS read_calls
             FROM tool_calls
-            WHERE ts >= ? AND ts < ? AND target_path IS NOT NULL
+            WHERE ts >= ? AND ts < ?{frag} AND target_path IS NOT NULL
               AND tool_name IN ('Edit','Write','Read','NotebookEdit')
             GROUP BY target_path
             ORDER BY edits DESC
             LIMIT ?
             """,
-            (frm, to, limit),
+            (frm, to, *ap, limit),
         ).fetchall()
     return [dict(r) for r in rows]
 
 
-def q_extras_bash(frm: str, to: str, limit: int) -> list[dict]:
+def q_extras_bash(frm: str, to: str, limit: int, acct: str = "") -> list[dict]:
+    frag, ap = _af(acct)
     with _conn() as c:
         rows = c.execute(
-            """
+            f"""
             SELECT command_verb AS verb, COUNT(*) AS uses
             FROM tool_calls
-            WHERE ts >= ? AND ts < ? AND tool_name='Bash' AND command_verb IS NOT NULL
+            WHERE ts >= ? AND ts < ?{frag} AND tool_name='Bash' AND command_verb IS NOT NULL
             GROUP BY command_verb
             ORDER BY uses DESC
             LIMIT ?
             """,
-            (frm, to, limit),
+            (frm, to, *ap, limit),
         ).fetchall()
     return [dict(r) for r in rows]
 
 
-def q_extras_errors(frm: str, to: str) -> list[dict]:
+def q_extras_errors(frm: str, to: str, acct: str = "") -> list[dict]:
+    frag, ap = _af(acct)
     with _conn() as c:
         rows = c.execute(
-            """
+            f"""
             SELECT tool_name,
                    COUNT(*) AS total,
                    SUM(is_error) AS errors,
                    ROUND(100.0 * SUM(is_error) / COUNT(*), 1) AS error_pct
             FROM tool_calls
-            WHERE ts >= ? AND ts < ?
+            WHERE ts >= ? AND ts < ?{frag}
             GROUP BY tool_name
             HAVING SUM(is_error) > 0
             ORDER BY errors DESC
             """,
-            (frm, to),
+            (frm, to, *ap),
         ).fetchall()
     return [dict(r) for r in rows]
 
@@ -441,10 +468,14 @@ def q_extras_calls(
     status: str | None,
     limit: int,
     offset: int,
+    acct: str = "",
 ) -> dict:
     """Individual tool calls, newest first, with total for pagination."""
     where = ["ts >= ?", "ts < ?"]
     params: list[Any] = [frm, to]
+    if acct:
+        where.append("account = ?")
+        params.append(acct)
     if tool:
         where.append("tool_name = ?")
         params.append(tool)
@@ -469,12 +500,13 @@ def q_extras_calls(
     return {"total": total, "rows": [dict(r) for r in rows]}
 
 
-def q_extras_overview(frm: str, to: str) -> dict:
+def q_extras_overview(frm: str, to: str, acct: str = "") -> dict:
     """Single-roundtrip aggregate for the Activity tab."""
+    frag, ap = _af(acct)
     with _conn() as c:
         # totals + cardinality
         tot = c.execute(
-            """
+            f"""
             SELECT
               COUNT(*)                              AS tool_calls,
               COUNT(DISTINCT tool_name)             AS distinct_tools,
@@ -482,14 +514,14 @@ def q_extras_overview(frm: str, to: str) -> dict:
               COUNT(DISTINCT subagent_type)         AS distinct_agents,
               COUNT(DISTINCT mcp_server)            AS distinct_mcp,
               SUM(CASE WHEN is_error=1 THEN 1 ELSE 0 END) AS errors
-            FROM tool_calls WHERE ts >= ? AND ts < ?
+            FROM tool_calls WHERE ts >= ? AND ts < ?{frag}
             """,
-            (frm, to),
+            (frm, to, *ap),
         ).fetchone()
         sp = c.execute(
-            "SELECT COUNT(*) AS n, COUNT(DISTINCT command) AS distinct_commands "
-            "FROM slash_prompts WHERE ts >= ? AND ts < ?",
-            (frm, to),
+            f"SELECT COUNT(*) AS n, COUNT(DISTINCT command) AS distinct_commands "
+            f"FROM slash_prompts WHERE ts >= ? AND ts < ?{frag}",
+            (frm, to, *ap),
         ).fetchone()
     d = dict(tot) if tot else {}
     d["slash_prompts"] = sp["n"] if sp else 0
@@ -512,39 +544,39 @@ def index(request: Request):
 @app.get("/api/summary")
 def api_summary(request: Request):
     f, t, label = _qparams(request)
-    return {"window": label, "from": f, "to": t, **q_summary(f, t)}
+    return {"window": label, "from": f, "to": t, **q_summary(f, t, _acct(request))}
 
 
 @app.get("/api/timeseries")
 def api_timeseries(request: Request):
     f, t, label = _qparams(request)
     bucket = request.query_params.get("bucket", "day")
-    return {"window": label, "bucket": bucket, "rows": q_timeseries(f, t, bucket)}
+    return {"window": label, "bucket": bucket, "rows": q_timeseries(f, t, bucket, _acct(request))}
 
 
 @app.get("/api/by_model")
 def api_by_model(request: Request):
     f, t, label = _qparams(request)
-    return {"window": label, "rows": q_by_model(f, t)}
+    return {"window": label, "rows": q_by_model(f, t, _acct(request))}
 
 
 @app.get("/api/by_project")
 def api_by_project(request: Request):
     f, t, label = _qparams(request)
     limit = int(request.query_params.get("limit", "20"))
-    return {"window": label, "rows": q_by_project(f, t, limit)}
+    return {"window": label, "rows": q_by_project(f, t, limit, _acct(request))}
 
 
 @app.get("/api/heatmap")
 def api_heatmap(request: Request):
     f, t, label = _qparams(request)
-    return {"window": label, "rows": q_heatmap(f, t)}
+    return {"window": label, "rows": q_heatmap(f, t, _acct(request))}
 
 
 @app.get("/api/distributions")
 def api_distributions(request: Request):
     f, t, label = _qparams(request)
-    return {"window": label, **q_distributions(f, t)}
+    return {"window": label, **q_distributions(f, t, _acct(request))}
 
 
 @app.get("/api/top_sessions")
@@ -552,14 +584,14 @@ def api_top_sessions(request: Request):
     f, t, label = _qparams(request)
     by = request.query_params.get("by", "tokens")
     limit = int(request.query_params.get("limit", "20"))
-    return {"window": label, "by": by, "rows": q_top_sessions(f, t, by, limit)}
+    return {"window": label, "by": by, "rows": q_top_sessions(f, t, by, limit, _acct(request))}
 
 
 @app.get("/api/top_days")
 def api_top_days(request: Request):
     f, t, label = _qparams(request)
     limit = int(request.query_params.get("limit", "10"))
-    return {"window": label, "rows": q_top_days(f, t, limit)}
+    return {"window": label, "rows": q_top_days(f, t, limit, _acct(request))}
 
 
 @app.get("/api/meta")
@@ -567,6 +599,23 @@ def api_meta():
     m = q_meta()
     m["extras_enabled"] = EXTRAS_ON
     return m
+
+
+@app.get("/api/accounts")
+def api_accounts():
+    """Accounts present in the DB, with row counts and activity span."""
+    if not DB_PATH.exists():
+        return {"accounts": []}
+    try:
+        with _conn() as c:
+            rows = c.execute(
+                "SELECT account AS name, COUNT(*) AS msgs, "
+                "MIN(ts) AS first_ts, MAX(ts) AS last_ts "
+                "FROM messages GROUP BY account ORDER BY msgs DESC"
+            ).fetchall()
+    except sqlite3.OperationalError:
+        return {"accounts": []}
+    return {"accounts": [dict(r) for r in rows]}
 
 
 @app.post("/refresh")
@@ -602,7 +651,7 @@ def api_extras_overview(request: Request):
     if fail is not None:
         return fail
     f, t, label = _qparams(request)
-    return {"window": label, **q_extras_overview(f, t)}
+    return {"window": label, **q_extras_overview(f, t, _acct(request))}
 
 
 @app.get("/api/extras/skills")
@@ -611,7 +660,7 @@ def api_extras_skills(request: Request):
     if fail is not None:
         return fail
     f, t, label = _qparams(request)
-    return {"window": label, "rows": q_extras_skills(f, t)}
+    return {"window": label, "rows": q_extras_skills(f, t, _acct(request))}
 
 
 @app.get("/api/extras/tools")
@@ -620,7 +669,7 @@ def api_extras_tools(request: Request):
     if fail is not None:
         return fail
     f, t, label = _qparams(request)
-    return {"window": label, "rows": q_extras_tools(f, t)}
+    return {"window": label, "rows": q_extras_tools(f, t, _acct(request))}
 
 
 @app.get("/api/extras/mcp")
@@ -629,7 +678,7 @@ def api_extras_mcp(request: Request):
     if fail is not None:
         return fail
     f, t, label = _qparams(request)
-    return {"window": label, "rows": q_extras_mcp(f, t)}
+    return {"window": label, "rows": q_extras_mcp(f, t, _acct(request))}
 
 
 @app.get("/api/extras/agents")
@@ -638,7 +687,7 @@ def api_extras_agents(request: Request):
     if fail is not None:
         return fail
     f, t, label = _qparams(request)
-    return {"window": label, "rows": q_extras_agents(f, t)}
+    return {"window": label, "rows": q_extras_agents(f, t, _acct(request))}
 
 
 @app.get("/api/extras/slash")
@@ -647,7 +696,7 @@ def api_extras_slash(request: Request):
     if fail is not None:
         return fail
     f, t, label = _qparams(request)
-    return {"window": label, "rows": q_extras_slash(f, t)}
+    return {"window": label, "rows": q_extras_slash(f, t, _acct(request))}
 
 
 @app.get("/api/extras/files")
@@ -657,7 +706,7 @@ def api_extras_files(request: Request):
         return fail
     f, t, label = _qparams(request)
     limit = int(request.query_params.get("limit", "30"))
-    return {"window": label, "rows": q_extras_files(f, t, limit)}
+    return {"window": label, "rows": q_extras_files(f, t, limit, _acct(request))}
 
 
 @app.get("/api/extras/bash")
@@ -667,7 +716,7 @@ def api_extras_bash(request: Request):
         return fail
     f, t, label = _qparams(request)
     limit = int(request.query_params.get("limit", "30"))
-    return {"window": label, "rows": q_extras_bash(f, t, limit)}
+    return {"window": label, "rows": q_extras_bash(f, t, limit, _acct(request))}
 
 
 @app.get("/api/extras/errors")
@@ -676,7 +725,7 @@ def api_extras_errors(request: Request):
     if fail is not None:
         return fail
     f, t, label = _qparams(request)
-    return {"window": label, "rows": q_extras_errors(f, t)}
+    return {"window": label, "rows": q_extras_errors(f, t, _acct(request))}
 
 
 @app.get("/api/extras/calls")
@@ -692,7 +741,7 @@ def api_extras_calls(request: Request):
     offset = max(0, int(q.get("offset", "0")))
     return {
         "window": label, "limit": limit, "offset": offset,
-        **q_extras_calls(f, t, tool, status, limit, offset),
+        **q_extras_calls(f, t, tool, status, limit, offset, _acct(request)),
     }
 
 
