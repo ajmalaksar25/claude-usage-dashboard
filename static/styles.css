@@ -123,7 +123,7 @@ h3 { font-family: var(--font-display); margin: 0; font-size: 16px; font-weight: 
 .windows button.on { background: var(--text); color: var(--bg); box-shadow: 0 1px 2px rgba(31,30,27,.18); }
 .windows button:active { transform: scale(0.97); }
 
-#refresh, #gmail-btn, #export-btn {
+#refresh, #gmail-btn, #export-btn, #profiles-btn {
   background: var(--panel); color: var(--text); border: 1px solid var(--border-soft);
   padding: 7px 12px; border-radius: var(--r-md); cursor: pointer; font: inherit; font-size: 11.5px;
   transition: border-color 160ms var(--ease-out), background 160ms var(--ease-out), transform 120ms var(--ease-out);
@@ -146,8 +146,8 @@ h3 { font-family: var(--font-display); margin: 0; font-size: 16px; font-weight: 
 .export-menu button:hover { background: var(--panel-2); }
 .export-menu button:active { transform: scale(0.97); }
 .export-menu .muted { font-size: 11px; color: var(--muted); margin-left: 4px; }
-#refresh:hover, #gmail-btn:hover, #export-btn:hover { border-color: var(--text); background: var(--panel); }
-#refresh:active, #gmail-btn:active, #export-btn:active { transform: scale(0.97); }
+#refresh:hover, #gmail-btn:hover, #export-btn:hover, #profiles-btn:hover { border-color: var(--text); background: var(--panel); }
+#refresh:active, #gmail-btn:active, #export-btn:active, #profiles-btn:active { transform: scale(0.97); }
 #refresh:disabled, #gmail-btn:disabled, #export-btn:disabled { opacity: .6; cursor: progress; }
 #gmail-btn.connected { border-color: rgba(93,138,82,.45); color: var(--good); }
 
@@ -197,15 +197,15 @@ main #extras-root .extras-divider { display: none; }
 .project-cell.clickable { cursor: pointer; }
 .project-cell.clickable:hover .name { color: var(--accent-text); text-decoration: underline; text-decoration-color: var(--accent-glow); text-underline-offset: 2px; }
 
-/* Accounts button — overlapping profile dots */
-.accounts-btn { display: inline-flex; align-items: center; gap: 8px; }
+/* Accounts button — overlapping profile dots, sized to match sibling glyphs */
+.accounts-btn { display: inline-flex; align-items: center; gap: 6px; }
 .acct-dots { display: inline-flex; align-items: center; }
 .acct-dots i {
-  width: 13px; height: 13px; border-radius: 999px; display: block;
-  border: 1.5px solid var(--panel);
+  width: 9px; height: 9px; border-radius: 999px; display: block;
+  border: 1px solid var(--panel); box-sizing: content-box;
 }
-.acct-dots i:first-child { background: var(--accent); z-index: 1; }
-.acct-dots i:last-child { background: var(--panel-3); margin-left: -6px; }
+.acct-dots i:first-child { background: var(--accent); z-index: 1; position: relative; }
+.acct-dots i:last-child { background: var(--muted-2); margin-left: -4px; }
 
 /* ---------- KPI grid ---------- */
 .kpi-row {
