@@ -46,6 +46,38 @@ No data is sent anywhere. The Gmail integration runs against your local OAuth to
 
 If `billing.json` is missing or empty, the dashboard hides the "Subscription paid" and "Saved by subscribing" cards and just shows the API cost — your would-have-paid number.
 
+## Multiple accounts
+
+Claude Code reads its config from `CLAUDE_CONFIG_DIR`, so running work and personal accounts side by side is just a matter of pointing that variable at different directories: `~/.claude` for the default account, `~/.claude-work`, `~/.claude-personal`, and so on. Each profile keeps its own credentials; the things you actually want everywhere — `skills/`, `agents/`, `commands/`, `rules/` — live once in `~/.claude-shared` and get linked into every profile.
+
+Setting that up by hand is tedious, so the repo ships `ccm.py` (Claude Config Manager) — pure stdlib, no deps, works on macOS/Linux/Windows (falls back to NTFS junctions when symlinks need privileges):
+
+```bash
+# Move your existing skills/agents/commands/rules into ~/.claude-shared,
+# leaving links behind in ~/.claude:
+python ccm.py init-shared --from-profile default
+
+# Create a second account, pre-linked to the shared resources:
+python ccm.py create work
+
+# Paste the printed alias into your shell rc, then log in once:
+alias claude-work='CLAUDE_CONFIG_DIR="$HOME/.claude-work" claude'
+claude-work
+
+# See everything / print aliases for zsh, bash, and PowerShell / audit:
+python ccm.py list
+python ccm.py aliases --shell all
+python ccm.py doctor
+```
+
+`ccm.py` never touches `.credentials.json`, `settings.json`, `projects/`, `todos/`, or `memory/` — those stay private to each profile. It also refuses to delete a real directory with content in it; `doctor` will tell you when something needs `init-shared --from-profile`.
+
+The dashboard plays along automatically: it discovers every `~/.claude*/projects` directory as a separate account. If you keep profiles somewhere unusual, copy the convention into an `accounts.json` at the repo root (gitignored, like `billing.json`):
+
+```json
+[{"name": "work", "root": "~/.claude-work/projects"}]
+```
+
 ---
 
 ## Want to rebuild this with Claude Code?
