@@ -347,21 +347,24 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .footer-privacy .dot { width: 7px; height: 7px; border-radius: 999px; background: var(--good); }
 
 /* ---------- heatmap ---------- */
+/* Calendar spans the full card; weekday panel + streak cards sit in a row below */
 .heatmap-grid {
-  display: grid; gap: 22px;
-  grid-template-columns: minmax(0, 1fr) 240px;
+  display: grid; gap: 16px;
+  grid-template-columns: 1fr;
   align-items: start;
 }
-@media (max-width: 900px) { .heatmap-grid { grid-template-columns: 1fr; } }
 #cal-heatmap { padding: 0; min-width: 0; display: flex; flex-direction: column; align-items: stretch; }
 #cal-heatmap svg { display: block; max-width: 100%; align-self: center; }
 #cal-heatmap rect { transition: filter 120ms var(--ease-out); cursor: default; }
 #cal-heatmap rect:hover { filter: brightness(0.9) saturate(1.15); }
 
 #heatmap-side {
-  display: flex; flex-direction: column; gap: 14px;
-  padding: 6px 0; min-width: 0;
+  display: grid; gap: 14px;
+  grid-template-columns: minmax(260px, 1.5fr) repeat(3, minmax(0, 1fr));
+  padding: 0; min-width: 0;
 }
+@media (max-width: 1000px) { #heatmap-side { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 640px)  { #heatmap-side { grid-template-columns: 1fr; } }
 .side-stat {
   background: var(--panel-2); border: 1px solid var(--border-soft); border-radius: var(--r-md);
   padding: 10px 12px; display: flex; flex-direction: column; gap: 2px;

@@ -255,15 +255,16 @@ async function loadHeatmap() {
   // Layout — compute cell size to fill container
   const colCount = Math.ceil(days.length / 7);
   const containerWidth = container.getBoundingClientRect().width || 1000;
-  const padLeft = 28, padTop = 20;
+  // padRight keeps the last month label ("Jul '26") from clipping at the edge
+  const padLeft = 28, padTop = 20, padRight = 36;
   // Available width for cell grid
-  const availW = Math.max(200, containerWidth - padLeft - 4);
-  // Pick cell size: scale to width, capped so cells stay readable but fill the heatmap column
-  const cellMax = 22, cellMin = 10, gutterRatio = 0.22;
+  const availW = Math.max(200, containerWidth - padLeft - padRight);
+  // Pick cell size: scale to width, capped so cells stay readable but fill the card
+  const cellMax = 28, cellMin = 10, gutterRatio = 0.22;
   let cell = Math.min(cellMax, Math.max(cellMin, Math.floor((availW / colCount) / (1 + gutterRatio))));
   let gutter = Math.max(2, Math.round(cell * gutterRatio));
 
-  const w = padLeft + colCount * (cell + gutter);
+  const w = padLeft + colCount * (cell + gutter) + padRight;
   const h = padTop + 7 * (cell + gutter);
 
   const svgNS = "http://www.w3.org/2000/svg";
