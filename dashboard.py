@@ -5,6 +5,7 @@ Endpoints all accept ?window=all|1y|6m|3m|1m|15d|1w|today (or explicit
 """
 from __future__ import annotations
 
+import os
 import re
 import sqlite3
 import subprocess
@@ -26,7 +27,7 @@ import ccm
 import gmail_scraper
 
 ROOT = Path(__file__).parent
-DB_PATH = ROOT / "usage.db"
+DB_PATH = Path(os.environ.get("CLAUDE_USAGE_DB", ROOT / "usage.db")).expanduser()
 HOST = "127.0.0.1"
 PORT = 8765
 

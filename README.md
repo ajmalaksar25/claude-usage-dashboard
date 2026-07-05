@@ -34,6 +34,34 @@ First load takes about ten seconds while it parses your conversation history. Su
 
 The dashboard is intentionally middle-ground: not a CLI you have to grep your way through, not a click-and-go consumer app. If you can run a command in a terminal, you can run this.
 
+## Terminal CLI
+
+Everything the dashboard shows is also available in the terminal — no server, no browser:
+
+```bash
+python cli.py                      # headline numbers, all time
+python cli.py summary -w 1w        # this week
+python cli.py projects -w 1m -n 10 # top projects, last month
+python cli.py models               # tokens + cost per model
+python cli.py accounts             # per-account rollup
+python cli.py tools -w 1w          # tool usage        (index with: refresh --all)
+python cli.py calls -n 20 --errors # latest errored tool calls
+python cli.py refresh --all        # re-index logs incl. tool calls
+python cli.py dash --all           # launch the web dashboard
+```
+
+Filters compose everywhere: `-w <window> -a <account> -p <project>`.
+
+Or install the whole thing as real commands (works on Windows, macOS, Linux):
+
+```bash
+pipx install git+https://github.com/ajmalaksar25/claude-usage-dashboard.git
+claude-usage refresh --all && claude-usage        # usage stats anywhere
+ccm list                                          # profile manager anywhere
+```
+
+The installed copy keeps its database inside its own environment; point it elsewhere with `CLAUDE_USAGE_DB=/path/to/usage.db` or `--db`.
+
 ## How it reads your data
 
 - **Conversations** — read from Claude Code's local store (default location varies by OS; the dashboard auto-detects).
