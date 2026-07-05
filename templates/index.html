@@ -159,6 +159,110 @@
     </div>
   </section>
 
+  <!-- Extras: Activity & tools (only shown when started with --all) -->
+  <div id="extras-root" hidden>
+    <section class="extras-divider">
+      <div class="extras-divider-line"></div>
+      <h2 class="extras-title">Activity &amp; tools <span class="extras-flag">--all</span></h2>
+      <div class="extras-divider-line"></div>
+    </section>
+
+    <section class="kpi-row extras-kpis">
+      <div class="kpi"><div class="k">Tool calls</div>          <div class="v" id="ex-kpi-tools" data-loading="1"></div><div class="sub" id="ex-kpi-tools-sub"></div></div>
+      <div class="kpi"><div class="k">Skills used</div>          <div class="v" id="ex-kpi-skills" data-loading="1"></div><div class="sub">distinct</div></div>
+      <div class="kpi"><div class="k">Sub-agents</div>           <div class="v" id="ex-kpi-agents" data-loading="1"></div><div class="sub">distinct types</div></div>
+      <div class="kpi"><div class="k">MCP servers</div>          <div class="v" id="ex-kpi-mcp" data-loading="1"></div><div class="sub">distinct</div></div>
+      <div class="kpi"><div class="k">Slash prompts</div>        <div class="v" id="ex-kpi-slash" data-loading="1"></div><div class="sub" id="ex-kpi-slash-sub"></div></div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Skill usage</h2>
+        <div class="seg" id="skills-seg">
+          <button data-by="least" class="on">least used</button>
+          <button data-by="most">most used</button>
+        </div>
+      </div>
+      <div class="chart-wrap"><canvas id="chart-skills"></canvas></div>
+    </section>
+
+    <section class="grid-2">
+      <div class="card">
+        <div class="card-head"><h2>Tools by use count</h2></div>
+        <div class="chart-wrap tall"><canvas id="chart-tools"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>MCP servers</h2></div>
+        <div class="chart-wrap tall"><canvas id="chart-mcp"></canvas></div>
+      </div>
+    </section>
+
+    <section class="grid-2">
+      <div class="card">
+        <div class="card-head"><h2>Sub-agents</h2></div>
+        <div class="chart-wrap small"><canvas id="chart-agents"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Bash verbs</h2></div>
+        <div class="chart-wrap small"><canvas id="chart-bash"></canvas></div>
+      </div>
+    </section>
+
+    <section class="grid-2">
+      <div class="card">
+        <div class="card-head"><h2>Slash commands</h2></div>
+        <div class="table-wrap">
+          <table id="slash-table">
+            <thead><tr><th>Command</th><th>Uses</th><th>Last used</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Tool error rates</h2></div>
+        <div class="table-wrap">
+          <table id="errors-table">
+            <thead><tr><th>Tool</th><th>Errors</th><th>Total</th><th>Error %</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>Most-touched files</h2></div>
+      <div class="table-wrap">
+        <table id="files-table">
+          <thead><tr><th>Path</th><th>Touches</th><th>Edits</th><th>Writes</th><th>Reads</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Tool call log</h2>
+        <div class="calls-controls">
+          <select id="calls-tool"><option value="">all tools</option></select>
+          <div class="seg" id="calls-seg">
+            <button data-status="" class="on">all</button>
+            <button data-status="errors">errors only</button>
+          </div>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table id="calls-table">
+          <thead><tr><th>Time</th><th>Tool</th><th>Detail</th><th>Project</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="calls-foot">
+        <span class="muted" id="calls-count"></span>
+        <button id="calls-more" hidden>Load more</button>
+      </div>
+    </section>
+  </div>
+
   <footer class="footer">
     <span id="footer-meta"></span>
     <span id="footer-billing"></span>

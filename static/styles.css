@@ -385,3 +385,56 @@ main > section:nth-child(8) { animation-delay: 240ms; }
   main > section { animation: none; opacity: 1; transform: none; }
   *, *::before, *::after { transition-duration: 0ms !important; animation-duration: 0ms !important; }
 }
+
+/* ---------- Extras (Activity & tools) ---------- */
+#extras-root[hidden] { display: none; }
+#extras-root .extras-divider {
+  display: flex; align-items: center; gap: 14px;
+  margin: 28px 0 4px;
+  /* Cancel the main > section stagger animation for the divider */
+  opacity: 1 !important; transform: none !important; animation: none !important;
+}
+#extras-root .extras-divider-line {
+  flex: 1; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border), transparent);
+}
+#extras-root .extras-title {
+  margin: 0; font-size: 13px; font-weight: 600; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--muted); white-space: nowrap;
+}
+#extras-root .extras-flag {
+  display: inline-block; margin-left: 6px;
+  font: 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--chart-1);
+  background: rgba(217,119,87,.10); padding: 3px 6px; border-radius: 4px;
+  border: 1px solid rgba(217,119,87,.35);
+  text-transform: none; letter-spacing: 0;
+}
+#extras-root .extras-kpis .kpi { background: var(--panel); }
+
+/* Tool call log */
+.calls-controls { display: flex; align-items: center; gap: 10px; }
+.calls-controls select {
+  background: var(--panel-2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 6px;
+  font: inherit; font-size: 12px; padding: 5px 8px;
+}
+.calls-foot {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-top: 10px;
+}
+.calls-foot button {
+  background: var(--panel-2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 6px;
+  font: inherit; font-size: 12px; padding: 6px 14px; cursor: pointer;
+}
+.calls-foot button:hover { background: var(--panel-3); }
+.calls-foot button:active { transform: scale(0.97); }
+.calls-foot button[hidden] { display: none; }
+#calls-table td.nowrap, #calls-table td:first-child { white-space: nowrap; }
+.err-badge {
+  display: inline-block; margin-left: 6px;
+  font-size: 10px; line-height: 1; padding: 2px 5px; border-radius: 4px;
+  color: #e5726a; background: rgba(229,114,106,.12);
+  border: 1px solid rgba(229,114,106,.35);
+}

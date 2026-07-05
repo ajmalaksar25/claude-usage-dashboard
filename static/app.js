@@ -37,6 +37,11 @@ const STATE = {
   projBy: "tokens",
   sessBy: "tokens",
   showCost: true,
+  skillsBy: "least",   // 'least' | 'most'
+  extrasReady: false,  // becomes true if /api/extras/status reports tables present
+  callsTool: "",       // tool-name filter for the call log ("" = all)
+  callsStatus: "",     // "" = all | "errors"
+  callsShown: 0,       // rows currently rendered in the call log
 };
 
 const charts = {};       // id -> Chart instance
@@ -487,6 +492,260 @@ function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
 }
 
+// ---------- extras (Activity & tools) ----------
+
+async function loadExtras() {
+  const status = await api("/api/extras/status").catch(() => ({enabled:false}));
+  const root = document.getElementById("extras-root");
+  if (!root) return;
+  STATE.extrasReady = !!status.enabled;
+  if (!STATE.extrasReady) { root.hidden = true; return; }
+  root.hidden = false;
+
+  const ov = await api("/api/extras/overview", { window: STATE.window });
+  setKpi("ex-kpi-tools",  fmtInt(ov.tool_calls || 0), ov.tool_calls || 0);
+  document.getElementById("ex-kpi-tools-sub").textContent =
+    `${fmtInt(ov.distinct_tools||0)} distinct · ${fmtInt(ov.errors||0)} errors`;
+  setKpi("ex-kpi-skills", fmtInt(ov.distinct_skills || 0), ov.distinct_skills || 0);
+  setKpi("ex-kpi-agents", fmtInt(ov.distinct_agents || 0), ov.distinct_agents || 0);
+  setKpi("ex-kpi-mcp",    fmtInt(ov.distinct_mcp || 0),    ov.distinct_mcp || 0);
+  setKpi("ex-kpi-slash",  fmtInt(ov.slash_prompts || 0),   ov.slash_prompts || 0);
+  document.getElementById("ex-kpi-slash-sub").textContent =
+    `${fmtInt(ov.distinct_slash_commands||0)} distinct`;
+
+  await Promise.all([
+    loadExtrasSkills(),
+    loadExtrasTools(),
+    loadExtrasMcp(),
+    loadExtrasAgents(),
+    loadExtrasBash(),
+    loadExtrasSlash(),
+    loadExtrasErrors(),
+    loadExtrasFiles(),
+    loadExtrasCalls(),
+  ]);
+}
+
+async function loadExtrasSkills() {
+  const j = await api("/api/extras/skills", { window: STATE.window });
+  // server orders by uses ASC; pick least or most
+  const rows = (j.rows || []).slice();
+  const view = STATE.skillsBy === "most"
+    ? rows.slice().sort((a,b)=>b.uses-a.uses).slice(0, 25)
+    : rows.slice(0, 25);
+  upsertChart("chart-skills", {
+    type: "bar",
+    data: { labels: view.map(r=>r.skill),
+            datasets: [{ label: "uses", data: view.map(r=>r.uses),
+              backgroundColor: alpha(COLORS[STATE.skillsBy==="most"?0:5], .85), borderWidth: 0 }] },
+    options: {
+      indexAxis: "y", responsive: true, maintainAspectRatio: false,
+      scales: {
+        x: { grid: { color: "rgba(255,255,255,.04)" }, ticks: { precision: 0 } },
+        y: { grid: { display: false } },
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => `${ctx.parsed.x} use${ctx.parsed.x===1?"":"s"}` } },
+      },
+    },
+  });
+}
+
+async function loadExtrasTools() {
+  const j = await api("/api/extras/tools", { window: STATE.window });
+  populateCallsToolFilter(j.rows || []);
+  const rows = (j.rows || []).slice(0, 20);
+  upsertChart("chart-tools", {
+    type: "bar",
+    data: { labels: rows.map(r=>r.tool_name),
+            datasets: [{ label:"uses", data: rows.map(r=>r.uses),
+              backgroundColor: alpha(COLORS[1], .85), borderWidth: 0 }] },
+    options: {
+      indexAxis: "y", responsive: true, maintainAspectRatio: false,
+      scales: { x: { grid: { color: "rgba(255,255,255,.04)" }, ticks: { callback: v=>fmtCompact(v) } },
+                y: { grid: { display: false } } },
+      plugins: { legend: { display: false }, tooltip: {
+        callbacks: { label: ctx => {
+          const r = rows[ctx.dataIndex];
+          return r.errors ? `${fmtInt(ctx.parsed.x)} uses · ${fmtInt(r.errors)} err` : `${fmtInt(ctx.parsed.x)} uses`;
+        } } } },
+    },
+  });
+}
+
+async function loadExtrasMcp() {
+  const j = await api("/api/extras/mcp", { window: STATE.window });
+  const rows = (j.rows || []).slice(0, 20);
+  upsertChart("chart-mcp", {
+    type: "bar",
+    data: { labels: rows.map(r=>r.mcp_server),
+            datasets: [{ label:"uses", data: rows.map(r=>r.uses),
+              backgroundColor: alpha(COLORS[2], .85), borderWidth: 0 }] },
+    options: {
+      indexAxis: "y", responsive: true, maintainAspectRatio: false,
+      scales: { x: { grid: { color: "rgba(255,255,255,.04)" }, ticks: { precision: 0 } },
+                y: { grid: { display: false } } },
+      plugins: { legend: { display: false } },
+    },
+  });
+}
+
+async function loadExtrasAgents() {
+  const j = await api("/api/extras/agents", { window: STATE.window });
+  const rows = (j.rows || []).slice(0, 12);
+  if (!rows.length) {
+    upsertChart("chart-agents", {
+      type:"bar", data:{labels:["—"], datasets:[{data:[0], backgroundColor:alpha(COLORS[3],.4), borderWidth:0}]},
+      options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}},
+    });
+    return;
+  }
+  upsertChart("chart-agents", {
+    type: "doughnut",
+    data: { labels: rows.map(r=>r.subagent_type),
+            datasets: [{ data: rows.map(r=>r.uses),
+              backgroundColor: rows.map((_,i)=>COLORS[i%COLORS.length]),
+              borderColor: getCSS("--panel"), borderWidth: 2 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false, cutout: "55%",
+      plugins: {
+        legend: { position: "right", labels: { boxWidth: 10, boxHeight: 10 } },
+        tooltip: { callbacks: { label: ctx => `${ctx.label}: ${fmtInt(ctx.parsed)}` } },
+      },
+    },
+  });
+}
+
+async function loadExtrasBash() {
+  const j = await api("/api/extras/bash", { window: STATE.window, limit: 18 });
+  const rows = j.rows || [];
+  upsertChart("chart-bash", {
+    type: "bar",
+    data: { labels: rows.map(r=>r.verb),
+            datasets: [{ label:"uses", data: rows.map(r=>r.uses),
+              backgroundColor: alpha(COLORS[4], .85), borderWidth: 0 }] },
+    options: {
+      indexAxis: "y", responsive: true, maintainAspectRatio: false,
+      scales: { x: { grid: { color: "rgba(255,255,255,.04)" }, ticks: { precision: 0 } },
+                y: { grid: { display: false } } },
+      plugins: { legend: { display: false } },
+    },
+  });
+}
+
+async function loadExtrasSlash() {
+  const j = await api("/api/extras/slash", { window: STATE.window });
+  const tbody = document.querySelector("#slash-table tbody");
+  tbody.innerHTML = "";
+  for (const r of (j.rows || []).slice(0, 25)) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>/${escapeHtml(r.command)}</td>
+                    <td class="num">${fmtInt(r.uses)}</td>
+                    <td class="num">${fmtDate(r.last_ts)}</td>`;
+    tbody.appendChild(tr);
+  }
+  if (!(j.rows || []).length) {
+    tbody.innerHTML = `<tr><td colspan="3" class="muted">no slash commands in window</td></tr>`;
+  }
+}
+
+async function loadExtrasErrors() {
+  const j = await api("/api/extras/errors", { window: STATE.window });
+  const tbody = document.querySelector("#errors-table tbody");
+  tbody.innerHTML = "";
+  for (const r of j.rows || []) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${escapeHtml(r.tool_name)}</td>
+                    <td class="num">${fmtInt(r.errors)}</td>
+                    <td class="num">${fmtInt(r.total)}</td>
+                    <td class="num">${(r.error_pct ?? 0).toFixed(1)}%</td>`;
+    tbody.appendChild(tr);
+  }
+  if (!(j.rows || []).length) {
+    tbody.innerHTML = `<tr><td colspan="4" class="muted">no tool errors in window</td></tr>`;
+  }
+}
+
+async function loadExtrasFiles() {
+  const j = await api("/api/extras/files", { window: STATE.window, limit: 30 });
+  const tbody = document.querySelector("#files-table tbody");
+  tbody.innerHTML = "";
+  for (const r of j.rows || []) {
+    const tr = document.createElement("tr");
+    const short = r.path && r.path.length > 80 ? "…" + r.path.slice(-79) : r.path;
+    tr.innerHTML = `<td title="${escapeHtml(r.path)}">${escapeHtml(short)}</td>
+                    <td class="num">${fmtInt(r.edits)}</td>
+                    <td class="num">${fmtInt(r.edit_calls)}</td>
+                    <td class="num">${fmtInt(r.write_calls)}</td>
+                    <td class="num">${fmtInt(r.read_calls)}</td>`;
+    tbody.appendChild(tr);
+  }
+  if (!(j.rows || []).length) {
+    tbody.innerHTML = `<tr><td colspan="5" class="muted">no file activity in window</td></tr>`;
+  }
+}
+
+// ---------- tool call log ----------
+
+const CALLS_PAGE = 50;
+
+function populateCallsToolFilter(rows) {
+  const sel = document.getElementById("calls-tool");
+  if (!sel) return;
+  const current = STATE.callsTool;
+  sel.innerHTML = `<option value="">all tools</option>`;
+  for (const r of rows) {
+    const opt = document.createElement("option");
+    opt.value = r.tool_name;
+    opt.textContent = `${r.tool_name} (${fmtInt(r.uses)})`;
+    sel.appendChild(opt);
+  }
+  // keep the current selection if that tool still exists in this window
+  sel.value = current;
+  if (sel.value !== current) { sel.value = ""; STATE.callsTool = ""; }
+}
+
+function callDetail(r) {
+  if (r.tool_name === "Bash" && r.command_verb) return r.command_verb;
+  if (r.skill) return "/" + r.skill;
+  if (r.subagent_type) return r.subagent_type;
+  if (r.target_path) return r.target_path;
+  if (r.mcp_server) return r.mcp_server;
+  return "";
+}
+
+async function loadExtrasCalls(append = false) {
+  const offset = append ? STATE.callsShown : 0;
+  const j = await api("/api/extras/calls", {
+    window: STATE.window,
+    tool: STATE.callsTool || null,
+    status: STATE.callsStatus || null,
+    limit: CALLS_PAGE,
+    offset,
+  });
+  const tbody = document.querySelector("#calls-table tbody");
+  if (!append) tbody.innerHTML = "";
+  for (const r of j.rows || []) {
+    const tr = document.createElement("tr");
+    const detail = callDetail(r);
+    const short = detail.length > 70 ? "…" + detail.slice(-69) : detail;
+    tr.innerHTML = `
+      <td class="nowrap">${fmtDate(r.ts)}</td>
+      <td>${escapeHtml(r.tool_name)}${r.is_error ? ' <span class="err-badge">err</span>' : ""}</td>
+      <td title="${escapeHtml(detail)}">${escapeHtml(short) || "—"}</td>
+      <td>${escapeHtml(r.project || "—")}</td>`;
+    tbody.appendChild(tr);
+  }
+  STATE.callsShown = offset + (j.rows || []).length;
+  if (!STATE.callsShown) {
+    tbody.innerHTML = `<tr><td colspan="4" class="muted">no tool calls in window</td></tr>`;
+  }
+  document.getElementById("calls-count").textContent =
+    j.total ? `showing ${fmtInt(STATE.callsShown)} of ${fmtInt(j.total)} calls` : "";
+  document.getElementById("calls-more").hidden = STATE.callsShown >= j.total;
+}
+
 async function reloadAll() {
   await Promise.all([
     loadSummary(),
@@ -498,6 +757,7 @@ async function reloadAll() {
     loadTopSessions(),
     loadTopDays(),
     loadFooter(),
+    loadExtras(),
   ]);
 }
 
@@ -615,12 +875,45 @@ function bindGmail() {
   });
 }
 
+function bindSkillsSeg() {
+  const seg = document.getElementById("skills-seg");
+  if (!seg) return;
+  seg.addEventListener("click", e => {
+    const b = e.target.closest("button[data-by]");
+    if (!b) return;
+    seg.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b));
+    STATE.skillsBy = b.dataset.by;
+    loadExtrasSkills();
+  });
+}
+
+function bindCallsControls() {
+  const sel = document.getElementById("calls-tool");
+  const seg = document.getElementById("calls-seg");
+  const more = document.getElementById("calls-more");
+  if (!sel || !seg || !more) return;
+  sel.addEventListener("change", () => {
+    STATE.callsTool = sel.value;
+    loadExtrasCalls();
+  });
+  seg.addEventListener("click", e => {
+    const b = e.target.closest("button[data-status]");
+    if (!b) return;
+    seg.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b));
+    STATE.callsStatus = b.dataset.status;
+    loadExtrasCalls();
+  });
+  more.addEventListener("click", () => loadExtrasCalls(true));
+}
+
 bindWindows();
 bindProjSeg();
 bindSessSeg();
 bindRefresh();
 bindCostToggle();
 bindGmail();
+bindSkillsSeg();
+bindCallsControls();
 
 // Reflow heatmap on window resize (debounced)
 let _resizeT;

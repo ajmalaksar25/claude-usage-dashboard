@@ -27,6 +27,9 @@ DB_PATH = ROOT / "usage.db"
 HOST = "127.0.0.1"
 PORT = 8765
 
+# Set by main() at startup based on `--all` CLI flag. Persisted across /refresh.
+EXTRAS_ON = False
+
 WINDOWS = {
     "today": 0,
     "1w": 7,
@@ -276,11 +279,222 @@ def q_top_days(frm: str, to: str, limit: int) -> list[dict]:
 
 def q_meta() -> dict:
     if not DB_PATH.exists():
-        return {"last_index_at": None, "rows": 0}
+        return {"last_index_at": None, "rows": 0, "extras_indexed": False}
     with _conn() as c:
         r = c.execute("SELECT v FROM meta WHERE k='last_index_at'").fetchone()
         n = c.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
-    return {"last_index_at": (r[0] if r else None), "rows": n}
+        e = c.execute("SELECT v FROM meta WHERE k='extras_indexed'").fetchone()
+    return {
+        "last_index_at": (r[0] if r else None),
+        "rows": n,
+        "extras_indexed": bool(e and e[0] == "1"),
+    }
+
+
+# ---------- extras queries ----------
+
+def _extras_table_present() -> bool:
+    if not DB_PATH.exists():
+        return False
+    with _conn() as c:
+        r = c.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='tool_calls'"
+        ).fetchone()
+    return r is not None
+
+
+def q_extras_skills(frm: str, to: str) -> list[dict]:
+    with _conn() as c:
+        rows = c.execute(
+            """
+            SELECT skill, COUNT(*) AS uses, MAX(ts) AS last_ts
+            FROM tool_calls
+            WHERE ts >= ? AND ts < ? AND skill IS NOT NULL AND skill <> ''
+            GROUP BY skill
+            ORDER BY uses ASC, last_ts ASC
+            """,
+            (frm, to),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def q_extras_tools(frm: str, to: str) -> list[dict]:
+    with _conn() as c:
+        rows = c.execute(
+            """
+            SELECT tool_name, COUNT(*) AS uses,
+                   SUM(is_error) AS errors
+            FROM tool_calls
+            WHERE ts >= ? AND ts < ?
+            GROUP BY tool_name
+            ORDER BY uses DESC
+            """,
+            (frm, to),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def q_extras_mcp(frm: str, to: str) -> list[dict]:
+    with _conn() as c:
+        rows = c.execute(
+            """
+            SELECT mcp_server, COUNT(*) AS uses
+            FROM tool_calls
+            WHERE ts >= ? AND ts < ? AND mcp_server IS NOT NULL
+            GROUP BY mcp_server
+            ORDER BY uses DESC
+            """,
+            (frm, to),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def q_extras_agents(frm: str, to: str) -> list[dict]:
+    with _conn() as c:
+        rows = c.execute(
+            """
+            SELECT subagent_type, COUNT(*) AS uses
+            FROM tool_calls
+            WHERE ts >= ? AND ts < ? AND subagent_type IS NOT NULL
+            GROUP BY subagent_type
+            ORDER BY uses DESC
+            """,
+            (frm, to),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def q_extras_slash(frm: str, to: str) -> list[dict]:
+    with _conn() as c:
+        rows = c.execute(
+            """
+            SELECT command, COUNT(*) AS uses, MAX(ts) AS last_ts
+            FROM slash_prompts
+            WHERE ts >= ? AND ts < ?
+            GROUP BY command
+            ORDER BY uses DESC
+            """,
+            (frm, to),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def q_extras_files(frm: str, to: str, limit: int) -> list[dict]:
+    with _conn() as c:
+        rows = c.execute(
+            """
+            SELECT target_path AS path, COUNT(*) AS edits,
+                   SUM(CASE WHEN tool_name='Edit' THEN 1 ELSE 0 END) AS edit_calls,
+                   SUM(CASE WHEN tool_name='Write' THEN 1 ELSE 0 END) AS write_calls,
+                   SUM(CASE WHEN tool_name='Read' THEN 1 ELSE 0 END) AS read_calls
+            FROM tool_calls
+            WHERE ts >= ? AND ts < ? AND target_path IS NOT NULL
+              AND tool_name IN ('Edit','Write','Read','NotebookEdit')
+            GROUP BY target_path
+            ORDER BY edits DESC
+            LIMIT ?
+            """,
+            (frm, to, limit),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def q_extras_bash(frm: str, to: str, limit: int) -> list[dict]:
+    with _conn() as c:
+        rows = c.execute(
+            """
+            SELECT command_verb AS verb, COUNT(*) AS uses
+            FROM tool_calls
+            WHERE ts >= ? AND ts < ? AND tool_name='Bash' AND command_verb IS NOT NULL
+            GROUP BY command_verb
+            ORDER BY uses DESC
+            LIMIT ?
+            """,
+            (frm, to, limit),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def q_extras_errors(frm: str, to: str) -> list[dict]:
+    with _conn() as c:
+        rows = c.execute(
+            """
+            SELECT tool_name,
+                   COUNT(*) AS total,
+                   SUM(is_error) AS errors,
+                   ROUND(100.0 * SUM(is_error) / COUNT(*), 1) AS error_pct
+            FROM tool_calls
+            WHERE ts >= ? AND ts < ?
+            GROUP BY tool_name
+            HAVING SUM(is_error) > 0
+            ORDER BY errors DESC
+            """,
+            (frm, to),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def q_extras_calls(
+    frm: str,
+    to: str,
+    tool: str | None,
+    status: str | None,
+    limit: int,
+    offset: int,
+) -> dict:
+    """Individual tool calls, newest first, with total for pagination."""
+    where = ["ts >= ?", "ts < ?"]
+    params: list[Any] = [frm, to]
+    if tool:
+        where.append("tool_name = ?")
+        params.append(tool)
+    if status == "errors":
+        where.append("is_error = 1")
+    cond = " AND ".join(where)
+    with _conn() as c:
+        total = c.execute(
+            f"SELECT COUNT(*) FROM tool_calls WHERE {cond}", params
+        ).fetchone()[0]
+        rows = c.execute(
+            f"""
+            SELECT ts, tool_name, mcp_server, skill, subagent_type,
+                   target_path, command_verb, project, session_id, is_error
+            FROM tool_calls
+            WHERE {cond}
+            ORDER BY ts DESC
+            LIMIT ? OFFSET ?
+            """,
+            (*params, limit, offset),
+        ).fetchall()
+    return {"total": total, "rows": [dict(r) for r in rows]}
+
+
+def q_extras_overview(frm: str, to: str) -> dict:
+    """Single-roundtrip aggregate for the Activity tab."""
+    with _conn() as c:
+        # totals + cardinality
+        tot = c.execute(
+            """
+            SELECT
+              COUNT(*)                              AS tool_calls,
+              COUNT(DISTINCT tool_name)             AS distinct_tools,
+              COUNT(DISTINCT skill)                 AS distinct_skills,
+              COUNT(DISTINCT subagent_type)         AS distinct_agents,
+              COUNT(DISTINCT mcp_server)            AS distinct_mcp,
+              SUM(CASE WHEN is_error=1 THEN 1 ELSE 0 END) AS errors
+            FROM tool_calls WHERE ts >= ? AND ts < ?
+            """,
+            (frm, to),
+        ).fetchone()
+        sp = c.execute(
+            "SELECT COUNT(*) AS n, COUNT(DISTINCT command) AS distinct_commands "
+            "FROM slash_prompts WHERE ts >= ? AND ts < ?",
+            (frm, to),
+        ).fetchone()
+    d = dict(tot) if tot else {}
+    d["slash_prompts"] = sp["n"] if sp else 0
+    d["distinct_slash_commands"] = sp["distinct_commands"] if sp else 0
+    return d
 
 
 # ---------- app ----------
@@ -350,12 +564,136 @@ def api_top_days(request: Request):
 
 @app.get("/api/meta")
 def api_meta():
-    return q_meta()
+    m = q_meta()
+    m["extras_enabled"] = EXTRAS_ON
+    return m
 
 
 @app.post("/refresh")
 def refresh():
-    return reindex(DB_PATH, verbose=False)
+    return reindex(DB_PATH, extras=EXTRAS_ON, verbose=False)
+
+
+# ---------- extras endpoints ----------
+
+def _extras_ready_resp() -> JSONResponse | None:
+    """Return a JSONResponse if extras are unavailable, else None."""
+    if not _extras_table_present():
+        return JSONResponse(
+            {"enabled": False, "reason": "extras_not_indexed",
+             "hint": "start with --all to index tool calls and slash prompts"},
+            status_code=200,
+        )
+    return None
+
+
+@app.get("/api/extras/status")
+def api_extras_status(request: Request):
+    return {
+        "enabled": _extras_table_present(),
+        "extras_on": EXTRAS_ON,
+        **q_meta(),
+    }
+
+
+@app.get("/api/extras/overview")
+def api_extras_overview(request: Request):
+    fail = _extras_ready_resp()
+    if fail is not None:
+        return fail
+    f, t, label = _qparams(request)
+    return {"window": label, **q_extras_overview(f, t)}
+
+
+@app.get("/api/extras/skills")
+def api_extras_skills(request: Request):
+    fail = _extras_ready_resp()
+    if fail is not None:
+        return fail
+    f, t, label = _qparams(request)
+    return {"window": label, "rows": q_extras_skills(f, t)}
+
+
+@app.get("/api/extras/tools")
+def api_extras_tools(request: Request):
+    fail = _extras_ready_resp()
+    if fail is not None:
+        return fail
+    f, t, label = _qparams(request)
+    return {"window": label, "rows": q_extras_tools(f, t)}
+
+
+@app.get("/api/extras/mcp")
+def api_extras_mcp(request: Request):
+    fail = _extras_ready_resp()
+    if fail is not None:
+        return fail
+    f, t, label = _qparams(request)
+    return {"window": label, "rows": q_extras_mcp(f, t)}
+
+
+@app.get("/api/extras/agents")
+def api_extras_agents(request: Request):
+    fail = _extras_ready_resp()
+    if fail is not None:
+        return fail
+    f, t, label = _qparams(request)
+    return {"window": label, "rows": q_extras_agents(f, t)}
+
+
+@app.get("/api/extras/slash")
+def api_extras_slash(request: Request):
+    fail = _extras_ready_resp()
+    if fail is not None:
+        return fail
+    f, t, label = _qparams(request)
+    return {"window": label, "rows": q_extras_slash(f, t)}
+
+
+@app.get("/api/extras/files")
+def api_extras_files(request: Request):
+    fail = _extras_ready_resp()
+    if fail is not None:
+        return fail
+    f, t, label = _qparams(request)
+    limit = int(request.query_params.get("limit", "30"))
+    return {"window": label, "rows": q_extras_files(f, t, limit)}
+
+
+@app.get("/api/extras/bash")
+def api_extras_bash(request: Request):
+    fail = _extras_ready_resp()
+    if fail is not None:
+        return fail
+    f, t, label = _qparams(request)
+    limit = int(request.query_params.get("limit", "30"))
+    return {"window": label, "rows": q_extras_bash(f, t, limit)}
+
+
+@app.get("/api/extras/errors")
+def api_extras_errors(request: Request):
+    fail = _extras_ready_resp()
+    if fail is not None:
+        return fail
+    f, t, label = _qparams(request)
+    return {"window": label, "rows": q_extras_errors(f, t)}
+
+
+@app.get("/api/extras/calls")
+def api_extras_calls(request: Request):
+    fail = _extras_ready_resp()
+    if fail is not None:
+        return fail
+    f, t, label = _qparams(request)
+    q = request.query_params
+    tool = q.get("tool") or None
+    status = q.get("status") or None
+    limit = max(1, min(int(q.get("limit", "50")), 500))
+    offset = max(0, int(q.get("offset", "0")))
+    return {
+        "window": label, "limit": limit, "offset": offset,
+        **q_extras_calls(f, t, tool, status, limit, offset),
+    }
 
 
 @app.get("/api/gmail/status")
@@ -378,9 +716,15 @@ def _open_browser_later():
 
 
 def main():
+    global EXTRAS_ON
+    EXTRAS_ON = "--all" in sys.argv
+    if EXTRAS_ON:
+        print("[startup] extras mode ON — indexing tool calls and slash prompts")
     print(f"[startup] indexing logs (incremental)...")
-    summary = reindex(DB_PATH)
+    summary = reindex(DB_PATH, extras=EXTRAS_ON)
     print(f"[startup] ready. {summary['rows_total']} rows in DB.")
+    if EXTRAS_ON:
+        print(f"[startup] extras: {summary.get('extras_rows_total', 0)} tool calls indexed")
     print(f"[startup] open http://{HOST}:{PORT}")
     if "--no-browser" not in sys.argv:
         _open_browser_later()
