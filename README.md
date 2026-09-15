@@ -74,6 +74,21 @@ No data is sent anywhere. The Gmail integration runs against your local OAuth to
 
 If `billing.json` is missing or empty, the dashboard hides the "Subscription paid" and "Saved by subscribing" cards and just shows the API cost — your would-have-paid number.
 
+### Auto-refresh
+
+The dashboard keeps itself current — you don't have to restart it to see new token usage. A single background thread inside the server watches your account roots and runs the same incremental index it runs at startup, but only when something actually changed. The page polls `/api/meta` once a minute (only while the tab is visible) and re-renders when the index moves; the top bar shows `auto-refresh: on · last checked 2 min ago`.
+
+Detection is a stat pass, not a file read: the `projects/` directory of each account plus every project subdirectory (their mtime moves when a session file appears), and the transcripts touched in the last 24 hours (their size and mtime move when a session appends). A full directory walk happens hourly, or right after a directory change — which is what the indexer does anyway.
+
+The interval starts at 2 minutes and multiplies by 1.5 after every quiet check, up to 15 minutes; any change re-indexes and resets it to 2 minutes. On macOS battery power (`pmset -g batt`, checked at most once per poll and cached for 5 minutes) the wait doubles and never drops below 5 minutes. So the steady-state cost on an idle machine is one stat pass every 2 to 15 minutes — no extra process, no new dependency, no filesystem-event library.
+
+| | |
+| --- | --- |
+| `CUD_WATCH_INTERVAL` | base interval in seconds (default `120`) |
+| `CUD_WATCH_MAX_INTERVAL` | idle ceiling in seconds (default `900`) |
+| `CUD_WATCH_BATTERY_FACTOR` | interval multiplier on battery (default `2`) |
+| `--no-watch` | turn the watcher off: `python dashboard.py --no-watch`, or `claude-usage dash --no-watch` |
+
 ## Multiple accounts
 
 Claude Code reads its config from `CLAUDE_CONFIG_DIR`, so running work and personal accounts side by side is just a matter of pointing that variable at different directories: `~/.claude` for the default account, `~/.claude-work`, `~/.claude-personal`, and so on. Each profile keeps its own credentials; the things you actually want everywhere — `skills/`, `agents/`, `commands/`, `rules/` — live once in `~/.claude-shared` and get linked into every profile.

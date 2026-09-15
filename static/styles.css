@@ -108,6 +108,7 @@ h3 { font-family: var(--font-display); margin: 0; font-size: 16px; font-weight: 
 .local-pill .dot { width: 6px; height: 6px; border-radius: 999px; background: var(--good); }
 
 .controls { display: flex; align-items: center; gap: 10px; }
+.watch-status { color: var(--muted); font-size: 11px; white-space: nowrap; }
 
 .windows {
   display: inline-flex; background: var(--panel-2); border: 1px solid var(--border-soft);

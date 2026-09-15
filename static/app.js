@@ -524,6 +524,7 @@ async function loadFooter() {
   const m = await api("/api/meta");
   const last = m.last_index_at ? new Date(m.last_index_at).toLocaleString() : "never";
   document.getElementById("footer-meta").textContent = `${fmtInt(m.rows)} rows in DB · indexed ${last}`;
+  applyMeta(m);
   const s = await api("/api/summary", { window: "all" });
   if (s.billing_coverage?.last) {
     document.getElementById("footer-billing").textContent = `billing covers ${s.billing_coverage.first} → ${s.billing_coverage.last}`;
@@ -816,6 +817,47 @@ async function reloadAll() {
     loadExtras(),
   ]);
 }
+
+// ---------- auto-refresh (the server watches the logs; we watch the index) ----------
+const META_POLL_MS = 60000;
+let lastIndexAt = null;
+
+const fmtAgo = iso => {
+  if (!iso) return "never";
+  const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 90) return "just now";
+  const m = Math.round(s / 60);
+  return m < 60 ? `${m} min ago` : `${Math.round(m / 60)} h ago`;
+};
+
+// Records the index stamp and paints the auto-refresh indicator.
+function applyMeta(m) {
+  lastIndexAt = m.last_index_at || lastIndexAt;
+  const el = document.getElementById("watch-status");
+  if (!el) return;
+  const w = m.watcher;
+  if (!w || !w.enabled) { el.hidden = true; return; }
+  const mins = Math.max(1, Math.round((w.interval_s || 0) / 60));
+  el.hidden = false;
+  el.textContent = `auto-refresh: on · last checked ${fmtAgo(w.last_check_at)}`;
+  el.title = `checking every ~${mins} min${w.on_battery ? " (on battery)" : ""}`;
+}
+
+// Cheap poll: only /api/meta, only while the tab is visible. A moved
+// last_index_at means the watcher re-indexed, so re-render everything.
+async function pollMeta() {
+  if (document.visibilityState !== "visible") return;
+  let m;
+  try { m = await api("/api/meta"); } catch { return; }
+  const moved = m.last_index_at && lastIndexAt && m.last_index_at !== lastIndexAt;
+  applyMeta(m);
+  if (moved) { await loadAccounts(); await reloadAll(); }
+}
+
+setInterval(pollMeta, META_POLL_MS);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") pollMeta();
+});
 
 // ---------- wiring ----------
 function bindWindows() {
