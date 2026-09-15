@@ -90,7 +90,8 @@ class Watcher:
         self.reindex_fn = reindex_fn
         self.accounts_fn = accounts_fn
         self.base_interval = interval if interval is not None else default_interval()
-        self.max_interval = max_interval if max_interval is not None else default_max_interval()
+        ceiling = max_interval if max_interval is not None else default_max_interval()
+        self.max_interval = max(ceiling, self.base_interval)
         self.battery_factor = (
             battery_factor if battery_factor is not None else default_battery_factor()
         )

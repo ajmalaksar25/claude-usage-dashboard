@@ -12,7 +12,7 @@ your ~/.claude*/projects logs first.
     claude-usage tools                tool usage        (needs: refresh --all)
     claude-usage calls -n 20          latest tool calls (needs: refresh --all)
     claude-usage refresh --all        re-index logs incl. tool calls
-    claude-usage dash                 launch the web dashboard
+    claude-usage dash                 launch the web dashboard (auto-refreshing)
 
 Filters compose: `claude-usage tools -w 1m -a work -p myproject`.
 DB resolution: --db flag > CLAUDE_USAGE_DB env > usage.db next to this file
@@ -254,6 +254,8 @@ def cmd_dash(args) -> int:
     import dashboard
     if args.all and "--all" not in sys.argv:
         sys.argv.append("--all")
+    if args.no_watch and "--no-watch" not in sys.argv:
+        sys.argv.append("--no-watch")
     dashboard.main()
     return 0
 
@@ -292,6 +294,8 @@ def main(argv: list[str] | None = None) -> int:
 
     dash = sub.add_parser("dash", help="launch the web dashboard")
     dash.add_argument("--all", action="store_true", help="enable the Activity & tools tab")
+    dash.add_argument("--no-watch", action="store_true",
+                      help="do not auto-reindex when new activity appears")
 
     args = ap.parse_args(argv)
     cmd = args.cmd or "summary"
