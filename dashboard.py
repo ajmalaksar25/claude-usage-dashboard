@@ -22,9 +22,10 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from billing import subscription_cost
-from indexer import reindex
+from indexer import discover_accounts, reindex
 import ccm
 import gmail_scraper
+import watcher as watcher_mod
 
 ROOT = Path(__file__).parent
 DB_PATH = Path(os.environ.get("CLAUDE_USAGE_DB", ROOT / "usage.db")).expanduser()
@@ -33,6 +34,9 @@ PORT = 8765
 
 # Set by main() at startup based on `--all` CLI flag. Persisted across /refresh.
 EXTRAS_ON = False
+
+# Set by main() unless started with `--no-watch`. See watcher.py.
+WATCHER: watcher_mod.Watcher | None = None
 
 WINDOWS = {
     "today": 0,
@@ -618,6 +622,7 @@ def api_top_days(request: Request):
 def api_meta():
     m = q_meta()
     m["extras_enabled"] = EXTRAS_ON
+    m["watcher"] = WATCHER.status() if WATCHER else watcher_mod.DISABLED_STATUS
     return m
 
 
@@ -724,7 +729,9 @@ def api_profiles_init_shared(request: Request):
 
 @app.post("/refresh")
 def refresh():
-    return reindex(DB_PATH, extras=EXTRAS_ON, verbose=False)
+    # The lock is shared with the background watcher so the two never overlap.
+    with watcher_mod.INDEX_LOCK:
+        return reindex(DB_PATH, extras=EXTRAS_ON, verbose=False)
 
 
 # ---------- extras endpoints ----------
@@ -868,6 +875,20 @@ def _open_browser_later():
     threading.Timer(0.8, lambda: webbrowser.open(f"http://{HOST}:{PORT}")).start()
 
 
+def _start_watcher():
+    """Daemon thread that reindexes when new Claude activity shows up."""
+    global WATCHER
+    WATCHER = watcher_mod.Watcher(
+        lambda: reindex(DB_PATH, extras=EXTRAS_ON, verbose=False),
+        discover_accounts,
+    ).start()
+    print(
+        f"[startup] auto-refresh on — checking every "
+        f"{int(WATCHER.base_interval)}s, backing off to "
+        f"{int(WATCHER.max_interval)}s when idle (--no-watch to disable)"
+    )
+
+
 def main():
     global EXTRAS_ON
     EXTRAS_ON = "--all" in sys.argv
@@ -878,6 +899,8 @@ def main():
     print(f"[startup] ready. {summary['rows_total']} rows in DB.")
     if EXTRAS_ON:
         print(f"[startup] extras: {summary.get('extras_rows_total', 0)} tool calls indexed")
+    if "--no-watch" not in sys.argv:
+        _start_watcher()
     print(f"[startup] open http://{HOST}:{PORT}")
     if "--no-browser" not in sys.argv:
         _open_browser_later()
