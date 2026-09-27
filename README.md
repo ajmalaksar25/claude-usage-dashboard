@@ -65,7 +65,7 @@ The installed copy keeps its database inside its own environment; point it elsew
 ## How it reads your data
 
 - **Conversations** — read from Claude Code's local store (default location varies by OS; the dashboard auto-detects).
-- **API-equivalent cost** — calculated against Claude's published per-model API rates (input, output, cache read, cache write).
+- **API-equivalent cost** — calculated against Claude's published per-model API rates (input, output, cache read, cache write). Anthropic has no pricing API, so `pricing.py` ships a verified table and refreshes active models once a day from [LiteLLM's price table](https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json) (same numbers as [the docs page](https://platform.claude.com/docs/en/about-claude/pricing), machine-readable). The result is cached in `pricing.json` next to the database; if a rate moves, every stored row is re-priced from its token counts. Offline works — cached rates, then the built-in table. `/api/meta` reports when rates were last fetched.
 - **Subscription paid** — two options:
   - *Manual:* copy `billing.json.example` to `billing.json` and add one entry per receipt (`{receipt_id, start, end, plan, amount_usd, source: "manual"}`).
   - *Gmail invoice extraction:* click **✉ Connect Gmail** in the top bar. It pulls Anthropic's invoice emails and sums them. Read-only, runs locally.

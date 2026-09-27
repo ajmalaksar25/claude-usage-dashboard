@@ -23,6 +23,7 @@ from fastapi.templating import Jinja2Templates
 
 from billing import subscription_cost
 from indexer import discover_accounts, reindex
+import pricing
 import ccm
 import gmail_scraper
 import watcher as watcher_mod
@@ -327,6 +328,7 @@ def q_meta() -> dict:
         "last_index_at": (r[0] if r else None),
         "rows": n,
         "extras_indexed": bool(e and e[0] == "1"),
+        "pricing": pricing.meta(),
     }
 
 
