@@ -2,6 +2,7 @@ usage.db
 usage.db-journal
 usage.db-wal
 usage.db-shm
+pricing.json
 
 # Per-user secrets and personal data — never commit
 accounts.json

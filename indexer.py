@@ -19,6 +19,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+import pricing
 from pricing import cost_for_model
 
 CLAUDE_PROJECTS = Path.home() / ".claude" / "projects"
@@ -542,6 +543,8 @@ def reindex(
             [{"name": "default", "root": root}] if root is not None else discover_accounts()
         )
     conn = open_db(db_path, extras=extras)
+    # daily live-rate check; reprices existing rows if a rate moved (see pricing.py)
+    pricing.sync(db_path, conn, force=force, log=print if verbose else (lambda *_: None))
     cur = conn.cursor()
     cur.execute("SELECT path, size, mtime_ns FROM files")
     seen = {p: (s, m) for p, s, m in cur.fetchall()}
