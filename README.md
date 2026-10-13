@@ -1,52 +1,49 @@
 # Claude Usage Dashboard
 
-> A local, one-command dashboard that tells you how much you've actually saved (or not) by using Claude's subscription tiers vs. paying API list prices for the same usage. Runs entirely on your machine — no data leaves your device.
+> A local, one-command dashboard that shows how much you've actually saved (or not) by paying for Claude subscriptions instead of API list prices for the same usage. Runs entirely on your machine — no data leaves your device.
 
-Every Claude Code profile on the machine is indexed (`~/.claude`, `~/.claude-work`, `~/.claude-personal`, … — see `ACCOUNT_ROOTS` / `accounts.json`), along with OpenAI's Codex CLI (`~/.codex`) and the Pi coding agent (`~/.pi/agent`). Each message is tagged with its account, and duplicates across profiles are resolved by priority. Usage, subscription cost and savings are shown overall and per account. It only sees what is still on this machine's disk, or was indexed while it was; see [What it can and can't see](#what-it-can-and-cant-see).
+It indexes every Claude Code profile on the machine (`~/.claude`, `~/.claude-work`, …) plus Codex CLI and Pi sessions, prices each message at its model's API list rate, and compares the total with what you actually paid.
 
 ![Highlights view](docs/highlights.png)
-
-## What it does
-
-Reads your local Claude Code (and Codex CLI / Pi) conversation history, tallies tokens and messages by model and project, prices the same usage at each model's API list rates, and compares the result to what you've actually paid in subscriptions.
-
-The dashboard shows KPIs with a change against the previous window of the same length, daily activity as tokens by type, as API-rate cost by model (fast-mode spend hatched) or as API-rate cost by token type, with cumulative cost as a line, an activity heatmap, a models table with share of spend, top projects, and sortable session and day tables. Fast-mode, web-search, thinking-token and estimated-price figures appear when your logs contain them. It follows your system light or dark setting, or a theme you pick in the header, and Chart.js and the fonts ship in `static/vendor/`, so it works fully offline.
-
-Three tabs sit under the KPIs (a fourth, Activity & tools, appears when the dashboard starts with `--all`):
-
-- **Overview**: the accounts table, daily activity, heatmap, models and projects. Each account row shows how it is billed (Subscription, API, Cloud, or Gateway via its host), the basis for what it paid, its API-equivalent cost and what it actually paid. When the amount paid can't be known, the row says so and the note under the table says how to fix it: add the account's receipts to `billing.json`, or set a `markup_pct` for a pay-per-token router in `config.json`. Data-quality warnings (messages with no usage reported by a gateway, unpriced models, a client that reports no cache tokens) appear as chips with a plain-language note.
-- **Sessions & days**: sessions with their title, model mix, active time (marked "≈ span" when the transcript has no turn timings), cost, subagent cost, linked PRs and branch, sortable by cost, tokens, messages, active time, span or recency; plus the most active days.
-- **Breakdown**: where the spend went, by token type (input, output, 5-minute and 1-hour cache writes, cache reads, web search; each message's cost is split by its model's rates, so the parts add up to the total), main thread vs subagents, agent type, skill, MCP server, plugin, branch, PR, entry point or effort, as a bar chart and a table with thinking tokens. Spend whose transcript has since been deleted can't be attributed; it is shown as its own hatched bucket, never hidden. Below it, API errors and retries per day (rate limits, server errors, retries, quota rejections) with their details, and **Claude Code's own tally vs ours**: for the sessions where Claude Code wrote a cost record (about a fifth of them), its figure next to ours and the gap between them. The gap is shown on its own and is not added to any other figure.
-
-**Export** renders two shareable PNGs in the current theme, honouring the active window, account and project filters:
-
-- **Highlights**: total tokens, messages, sessions, projects, API-equivalent cost, subscription paid, the savings delta and multiplier, plus daily API-rate cost with the cumulative line.
-- **Full report**: everything above, plus an activity heatmap, a models table with share of spend, where the spend went (main thread vs subagents, with the unattributable share shown, and top skills), top projects, and a longest-conversations table.
-
-![Full report](docs/full-report.png)
 
 ## Quick start
 
 ```bash
 git clone https://github.com/ajmalaksar25/claude-usage-dashboard.git
 cd claude-usage-dashboard
-
-# Windows
-start.bat
-
-# macOS / Linux
-chmod +x start.sh && ./start.sh
+./start.sh        # macOS / Linux   (Windows: start.bat)
 ```
 
-The script creates a virtualenv, installs deps, parses your conversation history, and opens the dashboard at `http://127.0.0.1:8765`. Requires Python 3.10+.
+The script creates a virtualenv, indexes your history and opens `http://127.0.0.1:8765`. Requires Python 3.10+. The first run takes about ten seconds; after that only changed files are re-read, and a background watcher keeps the page current.
 
-First load takes about ten seconds while it parses your conversation history. Subsequent loads are near-instant — only files whose mtime changed are re-parsed.
+## What you get
 
-The dashboard is intentionally middle-ground: not a CLI you have to grep your way through, not a click-and-go consumer app. If you can run a command in a terminal, you can run this.
+- **Overview**: headline cards (would have cost, tokens, messages, you paid, saved), an accounts table showing how each account is billed, daily activity (tokens, cost by model or cost by token type), an activity heatmap, models and projects.
+- **Sessions & days**: each session's title, model mix, active time, cost, subagent cost, linked PRs and branch, plus the most active days.
+- **Breakdown**: where the spend went, by token type, main thread vs subagents, agent, skill, MCP server, plugin, branch, PR, entry point or effort. Also API errors and retries, and Claude Code's own cost tally next to ours.
+- **Export**: Highlights and Full report PNGs in the current theme and filters.
+
+Click an account, model, project, hour or row to filter the whole page. Chart.js and the fonts ship in `static/vendor/`, so it works offline.
+
+![Full report](docs/full-report.png)
+
+## What it can and can't see
+
+It reads local files only. None of these tools offers an API for past usage, so:
+
+- **Claude Code deletes transcripts after 30 days** by default ([docs](https://code.claude.com/docs/en/data-usage)), so a first run sees about a month. Raise `cleanupPeriodDays` in each profile's `settings.json` (e.g. `365`) to keep more.
+- **Indexed history outlives the transcript.** Tokens and cost stay in `usage.db` after the file is deleted, so let the dashboard index at least once a month and back up `usage.db`. Details such as agent, skill and branch can't be recovered for deleted transcripts; Breakdown shows that spend as "Not attributable".
+- **Only this machine.** Claude.ai chats, Claude Code on the web and other computers never reach it.
+- **Codex CLI** keeps its sessions with no automatic cleanup, so its history usually goes back further. Cursor and Gemini transcripts carry no token usage and are not read.
+- Usage a gateway didn't report is estimated and flagged; failed requests with no usage are not counted.
+
+## Billing
+
+- **Receipts**: copy `billing.json.example` to `billing.json`, or click **Connect Gmail** (read-only, runs locally) to import Anthropic, OpenAI/ChatGPT, Apple and Google Play receipts with currency conversion. Manage them under **Accounts → Receipts**. Without receipts the dashboard shows only the API cost, and periods without a receipt show "unknown", not $0.
+- **Per-account settings** go in `config.json` (see `config.json.example`): billing mode, `paid_by` to share one plan across accounts, and `"payer": "employer"` for a plan your employer pays. Employer-paid accounts are left out of **You paid** and **Saved by subscribing**; the savings subtitle shows the subtraction.
+- **API rates** come from Anthropic's published prices, refreshed daily from [LiteLLM's price table](https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json) and cached in `pricing.json`. When a rate changes, stored rows are re-priced. Offline, the built-in table is used.
 
 ## Terminal CLI
-
-Everything the dashboard shows is also available in the terminal — no server, no browser:
 
 ```bash
 python cli.py                      # headline numbers, all time
@@ -54,188 +51,46 @@ python cli.py summary -w 1w        # this week
 python cli.py projects -w 1m -n 10 # top projects, last month
 python cli.py models               # tokens + cost per model
 python cli.py accounts             # per-account rollup
-python cli.py tools -w 1w          # tool usage        (index with: refresh --all)
-python cli.py calls -n 20 --errors # latest errored tool calls
-python cli.py refresh --all        # re-index logs incl. tool calls
+python cli.py refresh --all        # re-index, incl. tool calls
 python cli.py dash --all           # launch the web dashboard
 ```
 
-Filters compose everywhere: `-w <window> -a <account> -p <project>`.
-
-Or install the whole thing as real commands (works on Windows, macOS, Linux):
-
-```bash
-pipx install git+https://github.com/ajmalaksar25/claude-usage-dashboard.git
-claude-usage refresh --all && claude-usage        # usage stats anywhere
-ccm list                                          # profile manager anywhere
-```
-
-The installed copy keeps its database inside its own environment; point it elsewhere with `CLAUDE_USAGE_DB=/path/to/usage.db` or `--db`.
-
-## How it reads your data
-
-- **Conversations** — read from Claude Code's local store (default location varies by OS; the dashboard auto-detects).
-- **Duplicates across profiles** — the same message id can exist in several config dirs (resumed sessions, copied projects). The highest-priority profile keeps it; `python indexer.py --force` re-prices every surviving transcript while preserving rows whose source file was deleted.
-- **API-equivalent cost** — calculated against Claude's published per-model API rates (input, output, cache read, cache write). Anthropic has no pricing API, so `pricing.py` ships a verified table and refreshes active models once a day from [LiteLLM's price table](https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json) (same numbers as [the docs page](https://platform.claude.com/docs/en/about-claude/pricing), machine-readable). The result is cached in `pricing.json` next to the database; if a rate moves, every stored row is re-priced from its token counts. Offline works — cached rates, then the built-in table. `/api/meta` reports when rates were last fetched.
-- **Subscription paid** — two options:
-  - *Manual:* copy `billing.json.example` to `billing.json` and add one entry per receipt (`{receipt_id, start, end, plan, amount_usd, source: "manual", account: "personal"}`). Use `account: "work"` or `"claudex"` only for charges actually billed to those profiles; a profile with no charges shows no subscription cost.
-  - *Gmail invoice extraction:* click **Connect Gmail** in the top bar. It reads receipt emails (Anthropic, OpenAI/ChatGPT, and plans bought through Apple or Google Play, with currency conversion) and adds them to `billing.json`. Read-only, runs locally. **Receipts** in the Accounts dialog lists, edits and deletes them.
-- **Who pays** — set `"payer": "employer"` on an account in `config.json` when your employer pays for that plan. **You paid** then counts only your own plans, and **Saved by subscribing** counts only the accounts you pay for. Its subtitle walks from **Would have cost** to the saving: API-rate cost, minus the usage on employer-paid accounts, minus what you paid.
-
-No data is sent anywhere. The Gmail integration runs against your local OAuth token, parses invoices in-process, and discards the rest. Revoke any time at [myaccount.google.com/permissions](https://myaccount.google.com/permissions).
-
-If `billing.json` is missing or empty, the dashboard hides the "Subscription paid" and "Saved by subscribing" cards and just shows the API cost — your would-have-paid number.
-
-### What it can and can't see
-
-The dashboard reads local files only. It has no access to any server-side history, and none of these tools offers an API to fetch past usage, so a few limits follow.
-
-- **Claude Code deletes old transcripts.** It keeps session transcripts in `~/.claude*/projects/` for 30 days by default and deletes older ones in a periodic cleanup sweep ([docs](https://code.claude.com/docs/en/data-usage)). On a first run the dashboard can only see roughly the last month, however long you have used Claude Code. To keep more, raise `cleanupPeriodDays` in each profile's `settings.json` (for example `"cleanupPeriodDays": 365`). It must be at least 1; `0` is rejected. Sessions started or continued from Claude Desktop or Cowork are kept at any age unless `desktopSessionCleanupPeriodDays` says otherwise.
-- **Indexed history outlives the transcript.** Once a message is in `usage.db` it stays, even after Claude Code deletes the file it came from. Tokens and cost survive, so totals keep going back to the first day you indexed. Details read later from the transcript (agent, skill, MCP server, branch, PR, effort) cannot be recovered for those messages; the Breakdown tab shows them as "Not attributable (transcript deleted)". To lose nothing, let the dashboard index at least once inside every retention window. While it runs, the watcher does this; otherwise run `claude-usage refresh --all` from time to time. Back up `usage.db`: it is the only copy of anything older than the retention window.
-- **Only this machine.** Usage from Claude.ai chats on the web, desktop or mobile, Claude Code on the web (cloud sessions run on Anthropic's machines and are not written to your disk), other computers, and runs with session persistence turned off (`--no-session-persistence`, `CLAUDE_CODE_SKIP_PROMPT_HISTORY`) never reaches it. Run the dashboard on each machine, or copy their profiles' `projects/` folders over.
-- **Codex CLI and Pi.** Codex keeps its rollouts in `~/.codex/sessions/` (and `archived_sessions/`, both read here) with no automatic cleanup, so its history usually goes back further. Pi reads from `~/.pi/agent/sessions/`. Cursor and Gemini transcripts carry no token usage and are not read.
-- **Gaps in what the logs report.** A gateway that does not pass usage back leaves messages with no token counts; those are estimated and flagged in amber. Requests that failed or were aborted before any usage was reported are not counted. Models with no public price show as "internal" at $0.
-- **Plans need receipts.** "You paid" only covers periods that have a receipt in `billing.json`. Before your first receipt, or for an account with none, the dashboard says the amount is unknown rather than showing $0.
-
-### Auto-refresh
-
-The dashboard keeps itself current — you don't have to restart it to see new token usage. A single background thread inside the server watches your account roots and runs the same incremental index it runs at startup, but only when something actually changed. The page polls `/api/meta` once a minute (only while the tab is visible) and re-renders when the index moves; the top bar shows `auto-refresh: on · last checked 2 min ago`.
-
-Detection is a stat pass, not a file read: the `projects/` directory of each account plus every project subdirectory (their mtime moves when a session file appears), and the transcripts touched in the last 24 hours (their size and mtime move when a session appends). A full directory walk happens hourly, or right after a directory change — which is what the indexer does anyway.
-
-The interval starts at 2 minutes and multiplies by 1.5 after every quiet check, up to 15 minutes; any change re-indexes and resets it to 2 minutes. On macOS battery power (`pmset -g batt`, checked at most once per poll and cached for 5 minutes) the wait doubles and never drops below 5 minutes. So the steady-state cost on an idle machine is one stat pass every 2 to 15 minutes — no extra process, no new dependency, no filesystem-event library.
-
-| | |
-| --- | --- |
-| `CUD_WATCH_INTERVAL` | base interval in seconds (default `120`) |
-| `CUD_WATCH_MAX_INTERVAL` | idle ceiling in seconds (default `900`) |
-| `CUD_WATCH_BATTERY_FACTOR` | interval multiplier on battery (default `2`) |
-| `--no-watch` | turn the watcher off: `python dashboard.py --no-watch`, or `claude-usage dash --no-watch` |
+Filters work everywhere: `-w <window> -a <account> -p <project>`. To install it as commands: `pipx install git+https://github.com/ajmalaksar25/claude-usage-dashboard.git`, then `claude-usage` and `ccm`.
 
 ## Multiple accounts
 
-Claude Code reads its config from `CLAUDE_CONFIG_DIR`, so running work and personal accounts side by side is just a matter of pointing that variable at different directories: `~/.claude` for the default account, `~/.claude-work`, `~/.claude-personal`, and so on. Each profile keeps its own credentials; the things you actually want everywhere — `skills/`, `agents/`, `commands/`, `rules/` — live once in `~/.claude-shared` and get linked into every profile.
+Claude Code reads its config from `CLAUDE_CONFIG_DIR`, so separate accounts are separate directories (`~/.claude-work`, `~/.claude-personal`, …). Each `~/.claude*/projects` directory becomes an account automatically; list unusual locations in `accounts.json` (`[{"name": "work", "root": "~/.claude-work/projects"}]`).
 
-Setting that up by hand is tedious, so the repo ships `ccm.py` (Claude Config Manager) — pure stdlib, no deps, works on macOS/Linux/Windows (falls back to NTFS junctions when symlinks need privileges):
+`ccm.py` (stdlib only, macOS/Linux/Windows) sets these profiles up and links `skills/`, `agents/`, `commands/` and `rules/` from one `~/.claude-shared`. It never touches credentials, settings or history.
 
 ```bash
-# Move your existing skills/agents/commands/rules into ~/.claude-shared,
-# leaving links behind in ~/.claude:
-python ccm.py init-shared --from-profile default
-
-# Create a second account, pre-linked to the shared resources:
-python ccm.py create work
-
-# Paste the printed alias into your shell rc, then log in once:
-alias claude-work='CLAUDE_CONFIG_DIR="$HOME/.claude-work" claude'
-claude-work
-
-# See everything / print aliases for zsh, bash, and PowerShell / audit:
-python ccm.py list
-python ccm.py aliases --shell all
-python ccm.py doctor
+python ccm.py init-shared --from-profile default   # move shared resources into ~/.claude-shared
+python ccm.py create work                          # new profile, prints its shell alias
+python ccm.py doctor                               # audit
 ```
 
-`ccm.py` never touches `.credentials.json`, `settings.json`, `projects/`, `todos/`, or `memory/` — those stay private to each profile. It also refuses to delete a real directory with content in it; `doctor` will tell you when something needs `init-shared --from-profile`.
+## Configuration
 
-The dashboard plays along automatically: it discovers every `~/.claude*/projects` directory as a separate account. If you keep profiles somewhere unusual, copy the convention into an `accounts.json` at the repo root (gitignored, like `billing.json`):
-
-```json
-[{"name": "work", "root": "~/.claude-work/projects"}]
-```
-
----
-
-## Want to rebuild this with Claude Code?
-
-This README is also a build spec. If you'd rather not install — or you want to fork the idea, change the stack, or extend the calculations — drop this whole file into a Claude Code session and ask it to recreate the project. The spec below is intentionally framed by **behavior, not implementation**, so Claude Code can pick its own stack.
-
-### Build spec
-
-#### Goal
-
-Build a local web dashboard that answers a single question: *"Is my Claude subscription actually saving me money compared to what I'd pay at API list prices for the same usage?"*
-
-#### Inputs
-
-- **Conversation history** — Claude Code's local conversation store. Auto-detect the path per OS (`~/.claude/...` on Unix-likes, `%APPDATA%\Claude\...` on Windows). Each conversation includes a model identifier, message-level token counts (input, output, cache read, cache write), timestamps, and a project identifier.
-- **Subscription spend** — either:
-  - User-entered tier(s) and effective date ranges, or
-  - Gmail invoice extraction via OAuth (read-only). Filter for Anthropic invoice emails, parse amount and date, sum.
-- **API rate table** — Claude's published per-model rates for input, output, cache read, cache write tokens. Hardcode current rates; allow override via config.
-
-#### Required outputs
-
-**Highlights view (compact, one-screen).**
-1. Total tokens (with input/output/cache breakdown, e.g. `in 1.3M · out 18.8M · cache 6.4B`)
-2. Messages count, with sessions and projects sub-counts
-3. API cost at standard rates
-4. Subscription paid (with tier history listed, e.g. `Pro · Pro extra · Max 5x · Max 20x`)
-5. **Saved by subscribing** — primary visual, big number, with `Nx cheaper than API` badge. The subtitle walks from "Would have cost" to the saving: API-rate cost, minus the usage on employer-paid accounts, minus what you paid
-6. Daily activity chart — bars for tokens/day overlaid with a cumulative cost line
-7. Header: date range, "runs locally · no data leaves your machine", generated-at timestamp
-
-**Full report view (detailed, scrollable).**
-1. Everything from Highlights
-2. **Activity heatmap** — Mon/Wed/Fri rows × dates, intensity by token count. Show active-days fraction, peak day, daily average.
-3. **By model** — table with model name, tokens, cost and a share-of-spend bar
-4. **Top projects** — horizontal bar chart, ordered by tokens, with cost and token count per row
-5. **Longest conversations** — table: project, model, message count, tokens, cost, duration
-6. Footer: repo link, "Generated locally · no data left this device" indicator
-
-#### Calculations
-
-```
-api_cost_per_message =
-    input_tokens × model.input_rate
-  + output_tokens × model.output_rate
-  + cache_read_tokens × model.cache_read_rate
-  + cache_write_tokens × model.cache_write_rate
-
-api_cost_total = sum(api_cost_per_message for all messages)
-saved          = api_cost_total − subscription_paid
-multiplier     = api_cost_total / subscription_paid
-```
-
-#### Constraints
-
-- Fully local. No outbound network calls except optional Gmail OAuth.
-- One-command setup. Cloning, installing dependencies, parsing data, and serving the UI should all happen behind a single entry point.
-- First load ≤ 10 seconds on a typical machine with a few months of history. Subsequent loads near-instant — cache parsed data and only re-parse changed conversations.
-- Two clearly separated views (Highlights and Full report). The user should land on Highlights by default.
-
-#### Stack hints (not prescriptive)
-
-- **Backend:** any language with good local file access (Python and Node.js are both fine).
-- **Frontend:** server-rendered HTML is fine; SPA is fine; whichever is faster to ship.
-- **Charts:** any library that handles bar, donut, and heatmap. Chart.js, D3, or Recharts all work.
-- **Persistence:** in-memory + a parsed-data cache file. No database needed.
-- **Gmail:** Google's OAuth flow + Gmail API for invoice extraction. Skip if not requested.
-
-#### Done criteria
-
-- Run the one-command setup on a fresh checkout.
-- Open the dashboard, see Highlights with real numbers from your local Claude Code history within 10 seconds.
-- Switch to Full report, see the heatmap, model breakdown, top projects, and longest conversations populated correctly.
-- Numbers reconcile: API cost matches a hand-calculation for one conversation; saved = API cost − subscription paid.
-
----
+| | |
+| --- | --- |
+| `CLAUDE_USAGE_DB` / `--db` | database location (default `usage.db` next to the code) |
+| `CLAUDE_USAGE_TZ` | time zone for day and hour buckets (or `timezone` in `config.json`) |
+| `CUD_WATCH_INTERVAL` | watcher base interval in seconds (default `120`; backs off to `CUD_WATCH_MAX_INTERVAL`, default `900`) |
+| `--no-watch` | turn the watcher off |
 
 ## Roadmap
 
 - Per-project deep-dive view
-- Export to JSON / CSV for further analysis
-- Cursor and Gemini CLI support (their local transcripts carry no token usage today)
-- Public/sharable summary card with PII stripped (for the inevitable Reddit thread)
+- Export to JSON / CSV
+- Cursor and Gemini CLI support (their transcripts carry no token usage today)
+- Shareable summary card with PII stripped
+
+Want to rebuild it your own way? [docs/BUILD_SPEC.md](docs/BUILD_SPEC.md) describes the behaviour for Claude Code to recreate.
 
 ## Feedback
 
-If you run this and your numbers come out wildly different from mine, please [open an issue](https://github.com/ajmalaksar25/claude-usage-dashboard/issues) — that's the whole point. The dashboard is more useful as a debate-settler the more usage patterns it covers.
+If your numbers come out wildly different from mine, please [open an issue](https://github.com/ajmalaksar25/claude-usage-dashboard/issues). The more usage patterns it covers, the better it settles the debate.
 
 ## License
 
-[MIT](LICENSE).
-
-## Author
-
-[Ajmal Aksar](https://www.ajmalaksar.com) — backend dev who shipped this in two hours after a Reddit comment hit too close to home.
+[MIT](LICENSE). Built by [Ajmal Aksar](https://www.ajmalaksar.com), a backend dev who shipped the first version in two hours after a Reddit comment hit too close to home.
