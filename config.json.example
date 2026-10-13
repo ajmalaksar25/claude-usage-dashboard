@@ -1,0 +1,22 @@
+{
+  "_comment": "Copy to config.json (git-ignored) and edit. Every key is optional. timezone: IANA zone for day/hour buckets and from/to bounds ($CLAUDE_USAGE_TZ wins). accounts.<name>: billing overrides per account (billing_mode subscription|api|cloud|gateway; payment subscription|list|per_token|unknown; markup_pct on top of list price; regional_premium_pct for Bedrock/Vertex regional endpoints; paid_by: the subscription provider whose receipts pay for the account -- anthropic|openai_chatgpt|openai_api; accounts with the same paid_by share those receipts by usage). Account names: Claude Code profiles (personal, work, claudex...), codex-cli (~/.codex, Codex CLI) and pi (~/.pi/agent). Codex CLI and Pi detect a ChatGPT login and default to paid_by openai_chatgpt. fx_per_usd: units of a currency per 1 USD, overriding the scraper's built-in approximate rates (AED is pegged at 3.6725). model_aliases: price a model as another one, opt-in; default none. Internal models with no public price (codex-auto-review, Codex CLI's approval/review model, covered by the ChatGPT plan) show as 'internal' at $0 until aliased, e.g. {\"codex-auto-review\": \"gpt-5.6-luna\"}; aliased messages are flagged as estimated-rate.",
+  "timezone": "Asia/Kolkata",
+  "accounts": {
+    "claudex": {
+      "billing_mode": "gateway",
+      "paid_by": "openai_chatgpt"
+    },
+    "codex-cli": {
+      "paid_by": "openai_chatgpt"
+    },
+    "work": {
+      "billing_mode": "cloud",
+      "regional_premium_pct": 10,
+      "payer": "employer"
+    }
+  },
+  "fx_per_usd": {
+    "EUR": 0.92
+  },
+  "model_aliases": {}
+}

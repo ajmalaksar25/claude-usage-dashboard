@@ -1,0 +1,43 @@
+From: Google Play <googleplay-noreply@google.com>
+To: Test User <user@example.com>
+Subject: Your Google Play Order Receipt from Jun 14, 2026
+Date: Sun, 14 Jun 2026 02:45:10 +0400
+Message-ID: <gp-fake-0002@mail.example.com>
+MIME-Version: 1.0
+Content-Type: multipart/alternative;
+ boundary="===============1533272414918303300=="
+
+--===============1533272414918303300==
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+
+Thank you.
+Order number: GPA.3399-0000-1111-22222..0
+Order date: 14 Jun 2026 02:45:03 GST
+Your account: user@example.com
+Item Price
+ChatGPT Plus (ChatGPT) 76.99 =D8=AF.=D8=A5./month
+Auto-renewing subscription
+Total: 76.99 =D8=AF.=D8=A5./month
+(Includes VAT of 3.67 =D8=AF.=D8=A5.)
+Payment method: Mastercard-0000
+
+--===============1533272414918303300==
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+MIME-Version: 1.0
+
+<html><body><table>
+<tr><td>Thank you.</td></tr>
+<tr><td>Order number: GPA.3399-0000-1111-22222..0</td></tr>
+<tr><td>Order date: 14 Jun 2026 02:45:03 GST</td></tr>
+<tr><td>Your account: user@example.com</td></tr>
+<tr><td>Item Price</td></tr>
+<tr><td>ChatGPT Plus (ChatGPT) 76.99 =D8=AF.=D8=A5./month</td></tr>
+<tr><td>Auto-renewing subscription</td></tr>
+<tr><td>Total: 76.99 =D8=AF.=D8=A5./month</td></tr>
+<tr><td>(Includes VAT of 3.67 =D8=AF.=D8=A5.)</td></tr>
+<tr><td>Payment method: Mastercard-0000</td></tr>
+</table></body></html>
+
+--===============1533272414918303300==--

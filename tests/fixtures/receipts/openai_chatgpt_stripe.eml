@@ -1,0 +1,59 @@
+From: OpenAI <invoice+statements@stripe.com>
+To: Test User <user@example.com>
+Subject: Your receipt from OpenAI #1234-5678
+Date: Tue, 14 Jul 2026 09:12:00 +0000
+Message-ID: <stripe-fake-0001@mail.example.com>
+MIME-Version: 1.0
+Content-Type: multipart/alternative;
+ boundary="===============2848208292114441505=="
+
+--===============2848208292114441505==
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+
+Receipt from OpenAI, LLC
+$21.00
+Paid July 14, 2026
+
+Receipt #1234-5678
+Amount paid $21.00
+Date paid Jul 14, 2026
+Payment method Visa - 4242
+
+Receipt #1234-5678
+Jul 14 =E2=80=93 Aug 14, 2026
+ChatGPT Plus Subscription Qty 1 $20.00
+Subtotal $20.00
+Tax (5%) $1.00
+Total $21.00
+Amount paid $21.00
+
+Questions? Visit help.openai.com
+
+--===============2848208292114441505==
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+MIME-Version: 1.0
+
+<html><body><table>
+<tr><td>Receipt from OpenAI, LLC</td></tr>
+<tr><td>$21.00</td></tr>
+<tr><td>Paid July 14, 2026</td></tr>
+<tr><td></td></tr>
+<tr><td>Receipt #1234-5678</td></tr>
+<tr><td>Amount paid $21.00</td></tr>
+<tr><td>Date paid Jul 14, 2026</td></tr>
+<tr><td>Payment method Visa - 4242</td></tr>
+<tr><td></td></tr>
+<tr><td>Receipt #1234-5678</td></tr>
+<tr><td>Jul 14 =E2=80=93 Aug 14, 2026</td></tr>
+<tr><td>ChatGPT Plus Subscription Qty 1 $20.00</td></tr>
+<tr><td>Subtotal $20.00</td></tr>
+<tr><td>Tax (5%) $1.00</td></tr>
+<tr><td>Total $21.00</td></tr>
+<tr><td>Amount paid $21.00</td></tr>
+<tr><td></td></tr>
+<tr><td>Questions? Visit help.openai.com</td></tr>
+</table></body></html>
+
+--===============2848208292114441505==--

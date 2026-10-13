@@ -1,0 +1,34 @@
+From: Google Play <googleplay-noreply@google.com>
+To: Test User <user@example.com>
+Subject: Payment declined for ChatGPT subscription
+Date: Fri, 14 Aug 2026 03:00:00 +0400
+Message-ID: <gp-fake-0005@mail.example.com>
+MIME-Version: 1.0
+Content-Type: multipart/alternative;
+ boundary="===============1177361782648608879=="
+
+--===============1177361782648608879==
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+
+Payment declined
+We couldn't process your payment for your ChatGPT Pro (ChatGPT) subscription =
+from OpenAI OpCo, LLC.
+Order number: GPA.3399-0000-1111-22222..2
+Fix your payment method in Google Play to keep your subscription.
+
+--===============1177361782648608879==
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+MIME-Version: 1.0
+
+<html><body><table>
+<tr><td>Payment declined</td></tr>
+<tr><td>We couldn&#x27;t process your payment for your ChatGPT Pro (ChatGPT) =
+subscription from OpenAI OpCo, LLC.</td></tr>
+<tr><td>Order number: GPA.3399-0000-1111-22222..2</td></tr>
+<tr><td>Fix your payment method in Google Play to keep your subscription.</td=
+></tr>
+</table></body></html>
+
+--===============1177361782648608879==--

@@ -7,6 +7,7 @@ pricing.json
 # Per-user secrets and personal data — never commit
 accounts.json
 billing.json
+config.json
 credentials.json
 token.json
 

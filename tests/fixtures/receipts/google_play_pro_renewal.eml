@@ -1,0 +1,46 @@
+From: Google Play <googleplay-noreply@google.com>
+To: Test User <user@example.com>
+Subject: Your Google Play Order Receipt from Jul 14, 2026
+Date: Tue, 14 Jul 2026 02:46:01 +0400
+Message-ID: <gp-fake-0004@mail.example.com>
+MIME-Version: 1.0
+Content-Type: multipart/alternative;
+ boundary="===============7530473757963810866=="
+
+--===============7530473757963810866==
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+
+Thank you.
+You've made a purchase from OpenAI OpCo, LLC on Google Play.
+Order number: GPA.3399-0000-1111-22222..1
+Order date: 14 Jul 2026 02:45:57 GST
+Your account: user@example.com
+Item Price
+ChatGPT Pro (ChatGPT) 384.99 =D8=AF.=D8=A5./month
+Auto-renewing subscription
+Total: 384.99 =D8=AF.=D8=A5./month
+(Includes VAT of 18.33 =D8=AF.=D8=A5.)
+Payment method: Mastercard-0000
+
+--===============7530473757963810866==
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+MIME-Version: 1.0
+
+<html><body><table>
+<tr><td>Thank you.</td></tr>
+<tr><td>You&#x27;ve made a purchase from OpenAI OpCo, LLC on Google Play.</td=
+></tr>
+<tr><td>Order number: GPA.3399-0000-1111-22222..1</td></tr>
+<tr><td>Order date: 14 Jul 2026 02:45:57 GST</td></tr>
+<tr><td>Your account: user@example.com</td></tr>
+<tr><td>Item Price</td></tr>
+<tr><td>ChatGPT Pro (ChatGPT) 384.99 =D8=AF.=D8=A5./month</td></tr>
+<tr><td>Auto-renewing subscription</td></tr>
+<tr><td>Total: 384.99 =D8=AF.=D8=A5./month</td></tr>
+<tr><td>(Includes VAT of 18.33 =D8=AF.=D8=A5.)</td></tr>
+<tr><td>Payment method: Mastercard-0000</td></tr>
+</table></body></html>
+
+--===============7530473757963810866==--

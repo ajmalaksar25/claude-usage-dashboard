@@ -2,16 +2,26 @@
 
 > A local, one-command dashboard that tells you how much you've actually saved (or not) by using Claude's subscription tiers vs. paying API list prices for the same usage. Runs entirely on your machine — no data leaves your device.
 
+Every Claude Code profile on the machine is indexed (`~/.claude`, `~/.claude-work`, `~/.claude-personal`, … — see `ACCOUNT_ROOTS` / `accounts.json`), along with OpenAI's Codex CLI (`~/.codex`) and the Pi coding agent (`~/.pi/agent`). Each message is tagged with its account, and duplicates across profiles are resolved by priority. Usage, subscription cost and savings are shown overall and per account. It only sees what is still on this machine's disk, or was indexed while it was; see [What it can and can't see](#what-it-can-and-cant-see).
+
 ![Highlights view](docs/highlights.png)
 
 ## What it does
 
-Reads your local Claude Code conversation history, tallies tokens and messages by model and project, prices the same usage at Claude's API list rates, and compares the result to what you've actually paid in subscriptions.
+Reads your local Claude Code (and Codex CLI / Pi) conversation history, tallies tokens and messages by model and project, prices the same usage at each model's API list rates, and compares the result to what you've actually paid in subscriptions.
 
-The output is two views:
+The dashboard shows KPIs with a change against the previous window of the same length, daily activity as tokens by type, as API-rate cost by model (fast-mode spend hatched) or as API-rate cost by token type, with cumulative cost as a line, an activity heatmap, a models table with share of spend, top projects, and sortable session and day tables. Fast-mode, web-search, thinking-token and estimated-price figures appear when your logs contain them. It follows your system light or dark setting, or a theme you pick in the header, and Chart.js and the fonts ship in `static/vendor/`, so it works fully offline.
 
-- **Highlights** — total tokens, messages, sessions, projects, API-equivalent cost, subscription paid, the savings delta and multiplier, plus a daily activity bar chart.
-- **Full report** — everything above, plus an activity heatmap, a model breakdown (donut + table), top projects, and a longest-conversations table.
+Three tabs sit under the KPIs (a fourth, Activity & tools, appears when the dashboard starts with `--all`):
+
+- **Overview**: the accounts table, daily activity, heatmap, models and projects. Each account row shows how it is billed (Subscription, API, Cloud, or Gateway via its host), the basis for what it paid, its API-equivalent cost and what it actually paid. When the amount paid can't be known, the row says so and the note under the table says how to fix it: add the account's receipts to `billing.json`, or set a `markup_pct` for a pay-per-token router in `config.json`. Data-quality warnings (messages with no usage reported by a gateway, unpriced models, a client that reports no cache tokens) appear as chips with a plain-language note.
+- **Sessions & days**: sessions with their title, model mix, active time (marked "≈ span" when the transcript has no turn timings), cost, subagent cost, linked PRs and branch, sortable by cost, tokens, messages, active time, span or recency; plus the most active days.
+- **Breakdown**: where the spend went, by token type (input, output, 5-minute and 1-hour cache writes, cache reads, web search; each message's cost is split by its model's rates, so the parts add up to the total), main thread vs subagents, agent type, skill, MCP server, plugin, branch, PR, entry point or effort, as a bar chart and a table with thinking tokens. Spend whose transcript has since been deleted can't be attributed; it is shown as its own hatched bucket, never hidden. Below it, API errors and retries per day (rate limits, server errors, retries, quota rejections) with their details, and **Claude Code's own tally vs ours**: for the sessions where Claude Code wrote a cost record (about a fifth of them), its figure next to ours and the gap between them. The gap is shown on its own and is not added to any other figure.
+
+**Export** renders two shareable PNGs in the current theme, honouring the active window, account and project filters:
+
+- **Highlights**: total tokens, messages, sessions, projects, API-equivalent cost, subscription paid, the savings delta and multiplier, plus daily API-rate cost with the cumulative line.
+- **Full report**: everything above, plus an activity heatmap, a models table with share of spend, where the spend went (main thread vs subagents, with the unattributable share shown, and top skills), top projects, and a longest-conversations table.
 
 ![Full report](docs/full-report.png)
 
@@ -65,14 +75,27 @@ The installed copy keeps its database inside its own environment; point it elsew
 ## How it reads your data
 
 - **Conversations** — read from Claude Code's local store (default location varies by OS; the dashboard auto-detects).
+- **Duplicates across profiles** — the same message id can exist in several config dirs (resumed sessions, copied projects). The highest-priority profile keeps it; `python indexer.py --force` re-prices every surviving transcript while preserving rows whose source file was deleted.
 - **API-equivalent cost** — calculated against Claude's published per-model API rates (input, output, cache read, cache write). Anthropic has no pricing API, so `pricing.py` ships a verified table and refreshes active models once a day from [LiteLLM's price table](https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json) (same numbers as [the docs page](https://platform.claude.com/docs/en/about-claude/pricing), machine-readable). The result is cached in `pricing.json` next to the database; if a rate moves, every stored row is re-priced from its token counts. Offline works — cached rates, then the built-in table. `/api/meta` reports when rates were last fetched.
 - **Subscription paid** — two options:
-  - *Manual:* copy `billing.json.example` to `billing.json` and add one entry per receipt (`{receipt_id, start, end, plan, amount_usd, source: "manual"}`).
-  - *Gmail invoice extraction:* click **✉ Connect Gmail** in the top bar. It pulls Anthropic's invoice emails and sums them. Read-only, runs locally.
+  - *Manual:* copy `billing.json.example` to `billing.json` and add one entry per receipt (`{receipt_id, start, end, plan, amount_usd, source: "manual", account: "personal"}`). Use `account: "work"` or `"claudex"` only for charges actually billed to those profiles; a profile with no charges shows no subscription cost.
+  - *Gmail invoice extraction:* click **Connect Gmail** in the top bar. It reads receipt emails (Anthropic, OpenAI/ChatGPT, and plans bought through Apple or Google Play, with currency conversion) and adds them to `billing.json`. Read-only, runs locally. **Receipts** in the Accounts dialog lists, edits and deletes them.
+- **Who pays** — set `"payer": "employer"` on an account in `config.json` when your employer pays for that plan. **You paid** then counts only your own plans, and **Saved by subscribing** counts only the accounts you pay for. Its subtitle walks from **Would have cost** to the saving: API-rate cost, minus the usage on employer-paid accounts, minus what you paid.
 
 No data is sent anywhere. The Gmail integration runs against your local OAuth token, parses invoices in-process, and discards the rest. Revoke any time at [myaccount.google.com/permissions](https://myaccount.google.com/permissions).
 
 If `billing.json` is missing or empty, the dashboard hides the "Subscription paid" and "Saved by subscribing" cards and just shows the API cost — your would-have-paid number.
+
+### What it can and can't see
+
+The dashboard reads local files only. It has no access to any server-side history, and none of these tools offers an API to fetch past usage, so a few limits follow.
+
+- **Claude Code deletes old transcripts.** It keeps session transcripts in `~/.claude*/projects/` for 30 days by default and deletes older ones in a periodic cleanup sweep ([docs](https://code.claude.com/docs/en/data-usage)). On a first run the dashboard can only see roughly the last month, however long you have used Claude Code. To keep more, raise `cleanupPeriodDays` in each profile's `settings.json` (for example `"cleanupPeriodDays": 365`). It must be at least 1; `0` is rejected. Sessions started or continued from Claude Desktop or Cowork are kept at any age unless `desktopSessionCleanupPeriodDays` says otherwise.
+- **Indexed history outlives the transcript.** Once a message is in `usage.db` it stays, even after Claude Code deletes the file it came from. Tokens and cost survive, so totals keep going back to the first day you indexed. Details read later from the transcript (agent, skill, MCP server, branch, PR, effort) cannot be recovered for those messages; the Breakdown tab shows them as "Not attributable (transcript deleted)". To lose nothing, let the dashboard index at least once inside every retention window. While it runs, the watcher does this; otherwise run `claude-usage refresh --all` from time to time. Back up `usage.db`: it is the only copy of anything older than the retention window.
+- **Only this machine.** Usage from Claude.ai chats on the web, desktop or mobile, Claude Code on the web (cloud sessions run on Anthropic's machines and are not written to your disk), other computers, and runs with session persistence turned off (`--no-session-persistence`, `CLAUDE_CODE_SKIP_PROMPT_HISTORY`) never reaches it. Run the dashboard on each machine, or copy their profiles' `projects/` folders over.
+- **Codex CLI and Pi.** Codex keeps its rollouts in `~/.codex/sessions/` (and `archived_sessions/`, both read here) with no automatic cleanup, so its history usually goes back further. Pi reads from `~/.pi/agent/sessions/`. Cursor and Gemini transcripts carry no token usage and are not read.
+- **Gaps in what the logs report.** A gateway that does not pass usage back leaves messages with no token counts; those are estimated and flagged in amber. Requests that failed or were aborted before any usage was reported are not counted. Models with no public price show as "internal" at $0.
+- **Plans need receipts.** "You paid" only covers periods that have a receipt in `billing.json`. Before your first receipt, or for an account with none, the dashboard says the amount is unknown rather than showing $0.
 
 ### Auto-refresh
 
@@ -148,14 +171,14 @@ Build a local web dashboard that answers a single question: *"Is my Claude subsc
 2. Messages count, with sessions and projects sub-counts
 3. API cost at standard rates
 4. Subscription paid (with tier history listed, e.g. `Pro · Pro extra · Max 5x · Max 20x`)
-5. **Saved by subscribing** — primary visual, big number, with `Nx cheaper than API` badge
+5. **Saved by subscribing** — primary visual, big number, with `Nx cheaper than API` badge. The subtitle walks from "Would have cost" to the saving: API-rate cost, minus the usage on employer-paid accounts, minus what you paid
 6. Daily activity chart — bars for tokens/day overlaid with a cumulative cost line
 7. Header: date range, "runs locally · no data leaves your machine", generated-at timestamp
 
 **Full report view (detailed, scrollable).**
 1. Everything from Highlights
 2. **Activity heatmap** — Mon/Wed/Fri rows × dates, intensity by token count. Show active-days fraction, peak day, daily average.
-3. **By model** — donut chart of token share + table with model name, tokens, cost
+3. **By model** — table with model name, tokens, cost and a share-of-spend bar
 4. **Top projects** — horizontal bar chart, ordered by tokens, with cost and token count per row
 5. **Longest conversations** — table: project, model, message count, tokens, cost, duration
 6. Footer: repo link, "Generated locally · no data left this device" indicator
@@ -200,10 +223,9 @@ multiplier     = api_cost_total / subscription_paid
 
 ## Roadmap
 
-- Multi-account support (currently parses one Claude account at a time)
 - Per-project deep-dive view
 - Export to JSON / CSV for further analysis
-- Comparison mode for users on Cursor, Codex, or other AI coding tools
+- Cursor and Gemini CLI support (their local transcripts carry no token usage today)
 - Public/sharable summary card with PII stripped (for the inevitable Reddit thread)
 
 ## Feedback
