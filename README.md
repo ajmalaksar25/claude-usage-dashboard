@@ -31,7 +31,7 @@ Click an account, model, project, hour or row to filter the whole page. Chart.js
 
 It reads local files only. None of these tools offers an API for past usage, so:
 
-- **Claude Code deletes transcripts after 30 days** by default ([docs](https://code.claude.com/docs/en/data-usage)), so a first run sees about a month. Raise `cleanupPeriodDays` in each profile's `settings.json` (e.g. `365`) to keep more.
+- **Claude Code deletes transcripts after 30 days** by default ([Cleaned up automatically](https://code.claude.com/docs/en/claude-directory#cleaned-up-automatically); also [Data retention](https://code.claude.com/docs/en/data-usage#data-retention)), so a first run sees about a month. Raise `cleanupPeriodDays` in each profile's `settings.json` (e.g. `365`) to keep more.
 - **Indexed history outlives the transcript.** Tokens and cost stay in `usage.db` after the file is deleted, so let the dashboard index at least once a month and back up `usage.db`. Details such as agent, skill and branch can't be recovered for deleted transcripts; Breakdown shows that spend as "Not attributable".
 - **Only this machine.** Claude.ai chats, Claude Code on the web and other computers never reach it.
 - **Codex CLI** keeps its sessions with no automatic cleanup, so its history usually goes back further. Cursor and Gemini transcripts carry no token usage and are not read.
