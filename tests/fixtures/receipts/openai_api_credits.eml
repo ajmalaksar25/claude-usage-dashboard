@@ -1,0 +1,53 @@
+From: OpenAI <invoice+statements@tm1.openai.com>
+To: Test User <user@example.com>
+Subject: Your receipt from OpenAI #2214-3392
+Date: Mon, 20 Jul 2026 16:40:00 +0000
+Message-ID: <stripe-fake-0002@mail.example.com>
+MIME-Version: 1.0
+Content-Type: multipart/alternative;
+ boundary="===============3475407572324729730=="
+
+--===============3475407572324729730==
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+
+Receipt from OpenAI, LLC
+$52.50
+Paid July 20, 2026
+
+Receipt #2214-3392
+Amount paid $52.50
+Date paid Jul 20, 2026
+
+OpenAI API credits Qty 1 $50.00
+Subtotal $50.00
+VAT (5%) $2.50
+Total $52.50
+Amount paid $52.50
+
+Your credits are available on platform.openai.com.
+
+--===============3475407572324729730==
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+MIME-Version: 1.0
+
+<html><body><table>
+<tr><td>Receipt from OpenAI, LLC</td></tr>
+<tr><td>$52.50</td></tr>
+<tr><td>Paid July 20, 2026</td></tr>
+<tr><td></td></tr>
+<tr><td>Receipt #2214-3392</td></tr>
+<tr><td>Amount paid $52.50</td></tr>
+<tr><td>Date paid Jul 20, 2026</td></tr>
+<tr><td></td></tr>
+<tr><td>OpenAI API credits Qty 1 $50.00</td></tr>
+<tr><td>Subtotal $50.00</td></tr>
+<tr><td>VAT (5%) $2.50</td></tr>
+<tr><td>Total $52.50</td></tr>
+<tr><td>Amount paid $52.50</td></tr>
+<tr><td></td></tr>
+<tr><td>Your credits are available on platform.openai.com.</td></tr>
+</table></body></html>
+
+--===============3475407572324729730==--

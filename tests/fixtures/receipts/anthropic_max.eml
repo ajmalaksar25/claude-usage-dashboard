@@ -1,0 +1,53 @@
+From: Anthropic, PBC <invoice+statements@mail.anthropic.com>
+To: Test User <user@example.com>
+Subject: Your receipt from Anthropic, PBC #2443-1340-7804
+Date: Wed, 06 May 2026 10:00:00 +0000
+Message-ID: <anth-fake-0001@mail.example.com>
+MIME-Version: 1.0
+Content-Type: multipart/alternative;
+ boundary="===============6924002612872800058=="
+
+--===============6924002612872800058==
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+
+Receipt from Anthropic, PBC
+$200.00
+Paid May 6, 2026
+
+Receipt #2443-1340-7804
+Amount paid $200.00
+Date paid May 6, 2026
+
+Receipt #2443-1340-7804
+Apr 6=E2=80=93May 6, 2026
+Max plan - 20x Qty 1 $200.00
+Subtotal $200.00
+Total excluding tax $200.00
+Total $200.00
+Amount paid $200.00
+
+--===============6924002612872800058==
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+MIME-Version: 1.0
+
+<html><body><table>
+<tr><td>Receipt from Anthropic, PBC</td></tr>
+<tr><td>$200.00</td></tr>
+<tr><td>Paid May 6, 2026</td></tr>
+<tr><td></td></tr>
+<tr><td>Receipt #2443-1340-7804</td></tr>
+<tr><td>Amount paid $200.00</td></tr>
+<tr><td>Date paid May 6, 2026</td></tr>
+<tr><td></td></tr>
+<tr><td>Receipt #2443-1340-7804</td></tr>
+<tr><td>Apr 6=E2=80=93May 6, 2026</td></tr>
+<tr><td>Max plan - 20x Qty 1 $200.00</td></tr>
+<tr><td>Subtotal $200.00</td></tr>
+<tr><td>Total excluding tax $200.00</td></tr>
+<tr><td>Total $200.00</td></tr>
+<tr><td>Amount paid $200.00</td></tr>
+</table></body></html>
+
+--===============6924002612872800058==--

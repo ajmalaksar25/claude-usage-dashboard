@@ -4,68 +4,152 @@
 <meta charset="utf-8" />
 <title>Claude Usage Dashboard</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Instrument+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" />
-<link rel="stylesheet" href="/static/styles.css" />
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23d97757'/%3E%3C/svg%3E" />
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<meta name="color-scheme" content="light dark" />
+<script>
+  // Apply the saved theme before first paint so dark mode never flashes light.
+  (function () {
+    try {
+      var t = localStorage.getItem("cud-theme");
+      if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
+    } catch (e) {}
+  })();
+</script>
+<link rel="stylesheet" href="/static/vendor/fonts/fonts.css?v={{ v }}" />
+<link rel="stylesheet" href="/static/styles.css?v={{ v }}" />
+<!-- PNG first for browsers without SVG icons; SVG after so the rest pick it. Declaring an icon also stops the /favicon.ico probe. -->
+<link rel="icon" href="/static/favicon-32.png?v={{ v }}" sizes="32x32" type="image/png" />
+<link rel="icon" href="/static/favicon.svg?v={{ v }}" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png?v={{ v }}" />
+<script src="/static/vendor/chart.umd.min.js?v={{ v }}"></script>
 </head>
 <body>
+<!-- Inline icon sprite: one stroke style, currentColor, no emoji glyphs -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-download" viewBox="0 0 16 16"><path d="M8 2.5v7.5M4.75 6.75 8 10l3.25-3.25M3 12.5h10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 16 16"><path d="M13 8a5 5 0 1 1-1.46-3.54M13 2.75v2.5h-2.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-mail" viewBox="0 0 16 16"><rect x="2" y="3.5" width="12" height="9" rx="1.75" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="m2.75 4.5 5.25 4 5.25-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-check" viewBox="0 0 16 16"><path d="m3.5 8.5 3 3 6-6.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-chevron" viewBox="0 0 16 16"><path d="m4.5 6.25 3.5 3.5 3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-close" viewBox="0 0 16 16"><path d="m4 4 8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 16 16"><circle cx="8" cy="8" r="3" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.5v1.5M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1.06 1.06M11.54 11.54l1.06 1.06M3.4 12.6l1.06-1.06M11.54 4.46l1.06-1.06" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 16 16"><path d="M13.25 9.6A5.5 5.5 0 0 1 6.4 2.75a5.5 5.5 0 1 0 6.85 6.85Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></symbol>
+  <symbol id="i-system" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="8.5" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5.5 13.5h5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+  <symbol id="i-sort" viewBox="0 0 16 16"><path d="m5 6.5 3-3 3 3M5 9.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-up" viewBox="0 0 16 16"><path d="M8 12.5v-9M4.5 7 8 3.5 11.5 7" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 16 16"><path d="M8 2.75 14 13.25H2L8 2.75Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 6.75v3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="11.4" r=".9" fill="currentColor"/></symbol>
+  <symbol id="i-back" viewBox="0 0 16 16"><path d="M12.5 8h-9M7 4.5 3.5 8 7 11.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-down" viewBox="0 0 16 16"><path d="M8 3.5v9M4.5 9 8 12.5 11.5 9" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+</svg>
+
 <header class="topbar">
   <div class="brand">
     <svg class="logo" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
       <path fill="currentColor" d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"/>
     </svg>
-    <div>
+    <div class="brand-text">
       <h1>Claude Usage</h1>
       <div class="subtitle">
         <span id="meta-line">loading…</span>
-        <span class="local-pill" title="Everything runs on your machine. Logs, billing, and Gmail tokens never leave this device.">
+        <span class="local-pill" title="Everything runs on your machine, including scripts and fonts. Logs, billing, and Gmail tokens never leave this device.">
           <span class="dot"></span> 100% local
         </span>
       </div>
     </div>
   </div>
   <div class="controls">
-    <div class="windows accounts" id="accounts" hidden></div>
-    <div class="windows" id="windows">
-      <button data-w="today">Today</button>
-      <button data-w="1w">1w</button>
-      <button data-w="15d">15d</button>
-      <button data-w="1m">1m</button>
-      <button data-w="3m">3m</button>
-      <button data-w="6m">6m</button>
-      <button data-w="1y">1y</button>
-      <button data-w="all" class="on">All</button>
+    <div class="windows accounts" id="accounts" role="group" aria-label="Account" hidden></div>
+    <label class="select-wrap accounts-select" id="accounts-select-wrap" hidden>
+      <span class="sr-only">Account</span>
+      <select id="accounts-select"></select>
+    </label>
+    <div class="windows" id="windows" role="group" aria-label="Time window">
+      <button data-w="today" aria-pressed="false">Today</button>
+      <button data-w="1w" aria-pressed="false">1w</button>
+      <button data-w="15d" aria-pressed="false">15d</button>
+      <button data-w="1m" aria-pressed="false">1m</button>
+      <button data-w="3m" aria-pressed="false">3m</button>
+      <button data-w="6m" aria-pressed="false">6m</button>
+      <button data-w="1y" aria-pressed="false">1y</button>
+      <button data-w="all" class="on" aria-pressed="true">All</button>
+      <button data-w="custom" id="custom-btn" aria-pressed="false" aria-haspopup="dialog" aria-expanded="false" aria-controls="custom-pop">Custom…</button>
     </div>
-    <div class="export-wrap">
-      <button id="export-btn" title="Export a shareable PNG">⬇ Export ▾</button>
-      <div id="export-menu" class="export-menu" hidden>
-        <button data-mode="highlights">Highlights<span class="muted"> · KPIs + savings</span></button>
-        <button data-mode="full">Full report<span class="muted"> · everything</span></button>
+    <label class="select-wrap window-select">
+      <span class="sr-only">Time window</span>
+      <select id="window-select">
+        <option value="today">Today</option>
+        <option value="1w">Last week</option>
+        <option value="15d">Last 15 days</option>
+        <option value="1m">Last month</option>
+        <option value="3m">Last 3 months</option>
+        <option value="6m">Last 6 months</option>
+        <option value="1y">Last year</option>
+        <option value="all" selected>All time</option>
+        <option value="custom">Custom…</option>
+      </select>
+    </label>
+    <div class="actions">
+      <div class="export-wrap">
+        <button id="export-btn" class="btn" title="Export a shareable PNG" aria-haspopup="menu" aria-expanded="false">
+          <svg class="ic" aria-hidden="true"><use href="#i-download"/></svg><span class="btn-label">Export</span><svg class="ic ic-sm" aria-hidden="true"><use href="#i-chevron"/></svg>
+        </button>
+        <div id="export-menu" class="export-menu" role="menu" hidden>
+          <button role="menuitem" data-mode="highlights">Highlights<span class="muted"> · KPIs + savings</span></button>
+          <button role="menuitem" data-mode="full">Full report<span class="muted"> · everything</span></button>
+        </div>
+      </div>
+      <button id="profiles-btn" class="btn accounts-btn" title="See and manage Claude accounts on this machine">
+        <span class="acct-dots" aria-hidden="true"><i></i><i></i></span><span class="btn-label">Accounts</span>
+      </button>
+      <span id="watch-status" class="watch-status" hidden></span>
+      <button id="refresh" class="btn" title="Re-index .jsonl files">
+        <svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg><span class="btn-label">Refresh</span>
+      </button>
+      <button id="gmail-btn" class="btn" title="Connect Gmail to auto-pull Anthropic receipts">
+        <svg class="ic" aria-hidden="true"><use href="#i-mail"/></svg><span class="btn-label">Connect Gmail</span>
+      </button>
+      <div class="theme-toggle" id="theme-toggle" role="radiogroup" aria-label="Color theme">
+        <button role="radio" data-theme-mode="system" aria-checked="true" title="Match system"><svg class="ic" aria-hidden="true"><use href="#i-system"/></svg><span class="sr-only">System</span></button>
+        <button role="radio" data-theme-mode="light" aria-checked="false" title="Light"><svg class="ic" aria-hidden="true"><use href="#i-sun"/></svg><span class="sr-only">Light</span></button>
+        <button role="radio" data-theme-mode="dark" aria-checked="false" title="Dark"><svg class="ic" aria-hidden="true"><use href="#i-moon"/></svg><span class="sr-only">Dark</span></button>
       </div>
     </div>
-    <button id="profiles-btn" class="accounts-btn" title="See and manage Claude accounts on this machine">
-      <span class="acct-dots" aria-hidden="true"><i></i><i></i></span>Accounts
-    </button>
-    <span id="watch-status" class="watch-status" hidden></span>
-    <button id="refresh" title="Re-index .jsonl files">↻ Refresh</button>
-    <button id="gmail-btn" title="Connect Gmail to auto-pull Anthropic receipts">✉ Connect Gmail</button>
   </div>
 </header>
 
-<dialog id="gmail-dialog">
-  <div class="dlg-head"><h3 id="gmail-dlg-title">Connect Gmail</h3><button class="dlg-close" data-close>×</button></div>
+<!-- Custom period: from/to local days, quick presets; opened from "Custom…" in the window controls -->
+<div id="custom-pop" class="popover custom-pop" role="dialog" aria-labelledby="custom-pop-title" hidden>
+  <div class="pop-head" id="custom-pop-title">Custom period</div>
+  <div class="pop-presets" role="group" aria-label="Quick ranges">
+    <button type="button" data-preset="month">This month</button>
+    <button type="button" data-preset="last-month">Last month</button>
+    <button type="button" data-preset="quarter">This quarter</button>
+    <button type="button" data-preset="ytd">Year to date</button>
+  </div>
+  <div class="pop-dates">
+    <label><span>From</span><input type="date" id="custom-from" required /></label>
+    <label><span>To</span><input type="date" id="custom-to" required /></label>
+  </div>
+  <p class="pop-err" id="custom-err" role="alert" hidden></p>
+  <div class="pop-foot">
+    <span class="muted pop-tz" id="custom-tz">local days</span>
+    <button type="button" class="btn" data-pop-cancel>Cancel</button>
+    <button type="button" class="btn btn-primary" id="custom-apply">Apply</button>
+  </div>
+</div>
+
+<dialog id="gmail-dialog" aria-labelledby="gmail-dlg-title">
+  <div class="dlg-head"><h3 id="gmail-dlg-title">Connect Gmail</h3><button class="dlg-close" data-close aria-label="Close dialog"><svg class="ic" aria-hidden="true"><use href="#i-close"/></svg></button></div>
   <div id="gmail-dlg-body"></div>
 </dialog>
 
-<dialog id="profiles-dialog">
-  <div class="dlg-head"><h3>Claude accounts on this machine</h3><button class="dlg-close" data-close>×</button></div>
+<dialog id="profiles-dialog" aria-labelledby="profiles-dlg-title">
+  <div class="dlg-head"><h3 id="profiles-dlg-title">Accounts on this machine</h3><button class="dlg-close" data-close aria-label="Close dialog"><svg class="ic" aria-hidden="true"><use href="#i-close"/></svg></button></div>
   <div id="profiles-dlg-body">
     <div id="profiles-shared" class="profiles-shared"></div>
     <div id="profiles-list" class="profiles-list"></div>
+    <div id="profiles-tools"></div>
     <div class="profiles-new">
+      <label class="sr-only" for="profile-new-name">New account name</label>
       <input id="profile-new-name" type="text" placeholder="new account name, e.g. personal" maxlength="32"
              spellcheck="false" autocomplete="off" />
       <button id="profile-create">Create account</button>
@@ -74,119 +158,281 @@
   </div>
 </dialog>
 
+<dialog id="receipts-dialog" aria-labelledby="receipts-dlg-title">
+  <div class="dlg-head"><h3 id="receipts-dlg-title">Receipts</h3><button class="dlg-close" data-close aria-label="Close dialog"><svg class="ic" aria-hidden="true"><use href="#i-close"/></svg></button></div>
+  <div id="receipts-dlg-body">
+    <p class="rc-intro">What each plan actually cost. These receipts set “You paid” and each account’s cost; a plan shared by several accounts is split between them by usage.</p>
+    <div id="receipts-gmail" class="rc-gmail"></div>
+    <button type="button" class="p-btn primary" id="receipt-add">Add a receipt</button>
+    <form id="receipt-form" class="rc-form" hidden novalidate>
+      <h4 id="rc-title" class="dlg-sub">Add a receipt</h4>
+      <div class="rc-grid">
+        <label><span class="lbl">Provider</span><select id="rc-provider" required></select></label>
+        <label><span class="lbl">Account</span><select id="rc-account" required></select></label>
+        <label class="wide"><span class="lbl">Plan</span><input id="rc-plan" type="text" maxlength="80" placeholder="e.g. ChatGPT Plus, Max 20x" required autocomplete="off" /></label>
+        <label><span class="lbl">Amount (USD)</span><input id="rc-amount" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="20.00" required /></label>
+        <div class="rc-orig-pair">
+          <label><span class="lbl">Original amount</span><input id="rc-orig" type="number" min="0" step="0.01" inputmode="decimal" placeholder="optional" /></label>
+          <label><span class="lbl">Currency</span><input id="rc-currency" type="text" maxlength="3" placeholder="AED" autocomplete="off" spellcheck="false" /></label>
+        </div>
+        <label><span class="lbl">Start</span><input id="rc-start" type="date" required /></label>
+        <label id="rc-end-label"><span class="lbl">End</span><input id="rc-end" type="date" /></label>
+        <label class="wide rc-check"><input id="rc-recurring" type="checkbox" /> <span>Recurring monthly (no end date needed)</span></label>
+        <label class="wide"><span class="lbl">Note</span><input id="rc-note" type="text" maxlength="200" placeholder="optional" autocomplete="off" /></label>
+      </div>
+      <p id="rc-plan-hint" class="muted rc-hint"></p>
+      <p id="rc-error" class="err" role="alert"></p>
+      <div class="row"><button type="submit" class="p-btn primary" id="rc-save">Add receipt</button><button type="button" class="p-btn" id="rc-cancel">Cancel</button></div>
+    </form>
+    <div id="receipts-list" class="receipts-list" aria-live="polite"></div>
+    <p class="muted rc-path">Stored in <code id="receipts-path"></code></p>
+  </div>
+</dialog>
+
 <main data-tab="overview">
-  <!-- KPI cards -->
-  <section class="kpi-row">
-    <div class="kpi hero"><div class="k">Would have cost</div><div class="v" id="kpi-api" data-loading="1"></div><div class="sub" id="kpi-api-sub">at standard API rates</div></div>
-    <div class="kpi"><div class="k">Total tokens</div>     <div class="v" id="kpi-tokens" data-loading="1"></div><div class="sub" id="kpi-tokens-sub"></div></div>
-    <div class="kpi"><div class="k">Messages</div>         <div class="v" id="kpi-msgs"   data-loading="1"></div><div class="sub" id="kpi-msgs-sub"></div></div>
-    <div class="kpi"><div class="k">Subscription paid</div><div class="v" id="kpi-sub"    data-loading="1"></div><div class="sub" id="kpi-sub-detail"></div></div>
+  <div id="error-banner" class="error-banner" role="alert" hidden></div>
+
+  <!-- Active cross-filters (day drill, model, project, account); mirrored in the URL -->
+  <div class="filter-bar" id="filter-bar" role="region" aria-label="Active filters" aria-live="polite" hidden></div>
+
+  <!-- KPI cards. Each value carries a delta chip vs the previous window of the same length. -->
+  <section class="kpi-row" id="kpi-row" data-card="summary" aria-label="Key figures">
+    <div class="kpi hero">
+      <div class="k">Would have cost</div>
+      <div class="v" id="kpi-api" data-loading="1"></div>
+      <div class="sub" id="kpi-api-sub">at standard API rates</div>
+      <div class="delta" id="kpi-api-delta" hidden></div>
+    </div>
+    <div class="kpi">
+      <div class="k">Total tokens</div>
+      <div class="v" id="kpi-tokens" data-loading="1"></div>
+      <div class="sub" id="kpi-tokens-sub">input, output and cache</div>
+      <div class="delta" id="kpi-tokens-delta" hidden></div>
+    </div>
+    <div class="kpi">
+      <div class="k">Messages</div>
+      <div class="v" id="kpi-msgs" data-loading="1"></div>
+      <div class="sub" id="kpi-msgs-sub">assistant replies</div>
+      <div class="delta" id="kpi-msgs-delta" hidden></div>
+    </div>
+    <div class="kpi" id="kpi-sub-card">
+      <div class="k">You paid</div>
+      <div class="v" id="kpi-sub" data-loading="1"></div>
+      <div class="sub" id="kpi-sub-detail">prorated to this window</div>
+      <div class="delta" id="kpi-sub-delta" hidden></div>
+    </div>
+    <div class="kpi fast" id="kpi-fast-card" hidden>
+      <div class="k">Fast-mode premium</div>
+      <div class="v" id="kpi-fast" data-loading="1"></div>
+      <div class="sub" id="kpi-fast-sub"></div>
+      <div class="delta" id="kpi-fast-delta" hidden></div>
+    </div>
     <div class="kpi savings">
       <div class="k">Saved by subscribing</div>
       <div class="v" id="kpi-savings" data-loading="1"></div>
       <div class="sub" id="kpi-mult"></div>
-      <div class="badge" id="kpi-savings-badge" hidden></div>
+      <div class="badge-row">
+        <div class="badge" id="kpi-savings-badge" hidden></div>
+        <div class="delta" id="kpi-savings-delta" hidden></div>
+      </div>
     </div>
   </section>
 
   <!-- Tabs: cut the scroll depth into three views -->
   <nav class="tabs" id="tabs" aria-label="Dashboard sections">
-    <button data-tab="overview" class="on">Overview</button>
-    <button data-tab="sessions">Sessions &amp; days</button>
-    <button data-tab="activity" id="tab-activity-btn" hidden>Activity &amp; tools</button>
-    <button id="proj-pill" class="proj-pill" hidden title="Click to clear the project filter"></button>
+    <button data-tab="overview" class="on" aria-pressed="true">Overview</button>
+    <button data-tab="sessions" aria-pressed="false">Sessions &amp; days</button>
+    <button data-tab="breakdown" aria-pressed="false">Breakdown</button>
+    <button data-tab="activity" id="tab-activity-btn" aria-pressed="false" hidden>Activity &amp; tools</button>
   </nav>
 
-  <!-- Timeline -->
-  <section class="card" data-tab="overview">
+  <!-- Accounts: per-profile usage, subscription and savings -->
+  <section class="card" data-tab="overview" data-card="accounts">
     <div class="card-head">
-      <h2>Daily activity</h2>
-      <div class="legend-toggle"><label><input type="checkbox" id="show-cost" checked /> overlay cost</label></div>
+      <div class="card-title">
+        <h2>Accounts</h2>
+        <div class="muted">one row per account · how each one is billed, and what it actually paid</div>
+      </div>
+      <button type="button" class="btn card-btn" id="receipts-btn" title="See and add receipts">Receipts</button>
+    </div>
+    <div class="table-wrap"><table id="accounts-table"><thead></thead><tbody></tbody></table></div>
+    <ul class="card-notes" id="accounts-notes" hidden></ul>
+  </section>
+
+  <!-- Timeline: tokens or $ per day -->
+  <section class="card" data-tab="overview" data-card="timeline">
+    <div class="card-head">
+      <div class="card-title">
+        <h2 id="timeline-title">Daily activity</h2>
+        <div class="muted" id="timeline-hint">tokens per day by type</div>
+      </div>
+      <div class="seg" id="metric-seg" role="group" aria-label="Metric">
+        <button data-metric="tokens" class="on" aria-pressed="true">Tokens</button>
+        <button data-metric="cost" aria-pressed="false">Cost by model</button>
+        <button data-metric="cost_type" aria-pressed="false">Cost by type</button>
+      </div>
     </div>
     <div class="chart-wrap"><canvas id="chart-timeline"></canvas></div>
   </section>
 
-  <!-- Heatmap -->
-  <section class="card" data-tab="overview">
+  <!-- When you work: hour x weekday for short windows, a calendar for long ones -->
+  <section class="card" data-tab="overview" data-card="heatmap">
     <div class="card-head">
-      <h2>Activity heatmap</h2>
-      <div class="muted" id="heatmap-hint">tokens per day · darker = busier</div>
+      <div class="card-title">
+        <h2 id="heatmap-title">When you work</h2>
+        <div class="muted" id="heatmap-hint">by weekday and hour, local time</div>
+      </div>
+      <div class="head-controls">
+        <div class="seg" id="heat-view" role="group" aria-label="Heatmap view">
+          <button data-view="hours" aria-pressed="false">Hours</button>
+          <button data-view="calendar" aria-pressed="false">Calendar</button>
+        </div>
+        <div class="seg" id="heat-metric" role="group" aria-label="Colour by">
+          <button data-metric="cost" class="on" aria-pressed="true">Cost</button>
+          <button data-metric="tokens" aria-pressed="false">Tokens</button>
+        </div>
+      </div>
     </div>
     <div class="heatmap-grid">
       <div id="cal-heatmap"></div>
-      <aside id="heatmap-side"></aside>
+      <aside id="heatmap-side" aria-label="Activity in this window"></aside>
     </div>
   </section>
 
-  <!-- Donuts -->
-  <section class="grid-2" data-tab="overview">
-    <div class="card">
-      <div class="card-head"><h2>Tokens by model</h2></div>
-      <div class="chart-wrap small"><canvas id="chart-model-tokens"></canvas></div>
+  <!-- Models: donut for share, table for detail; both set the model filter -->
+  <section class="card" data-tab="overview" data-card="models">
+    <div class="card-head">
+      <div class="card-title">
+        <h2>Models</h2>
+        <div class="muted" id="models-hint">share of spend at API rates</div>
+      </div>
     </div>
-    <div class="card">
-      <div class="card-head"><h2>Cost by model</h2></div>
-      <div class="chart-wrap small"><canvas id="chart-model-cost"></canvas></div>
+    <div class="models-split">
+      <div class="donut-col">
+        <div class="donut-wrap" id="models-donut">
+          <canvas id="chart-models"></canvas>
+          <div class="donut-center" id="donut-center" aria-hidden="true"></div>
+        </div>
+        <div class="donut-legend" id="donut-legend" role="group" aria-label="Models in the chart" hidden></div>
+      </div>
+      <div class="table-wrap no-cap"><table id="models-table"><thead></thead><tbody></tbody></table></div>
     </div>
   </section>
 
   <!-- Top projects -->
-  <section class="card" data-tab="overview">
+  <section class="card" data-tab="overview" data-card="projects">
     <div class="card-head">
-      <h2>Top projects</h2>
-      <div class="seg" id="proj-seg">
-        <button data-by="tokens" class="on">tokens</button>
-        <button data-by="cost">cost</button>
-        <button data-by="msgs">messages</button>
-        <button data-by="sessions">sessions</button>
+      <div class="card-title">
+        <h2>Top projects</h2>
+        <div class="muted">click a project to filter everything</div>
+      </div>
+      <div class="head-controls">
+        <div class="seg" id="proj-seg" role="group" aria-label="Rank projects by">
+          <button data-by="tokens" class="on" aria-pressed="true">tokens</button>
+          <button data-by="cost" aria-pressed="false">cost</button>
+          <button data-by="msgs" aria-pressed="false">messages</button>
+          <button data-by="sessions" aria-pressed="false">sessions</button>
+        </div>
+        <div class="seg" id="proj-view" role="group" aria-label="View">
+          <button data-view="chart" class="on" aria-pressed="true">chart</button>
+          <button data-view="table" aria-pressed="false">table</button>
+        </div>
       </div>
     </div>
-    <div class="chart-wrap tall"><canvas id="chart-projects"></canvas></div>
+    <div class="chart-wrap tall" id="proj-chart-wrap"><canvas id="chart-projects"></canvas></div>
+    <div class="table-wrap" id="proj-table-wrap" hidden><table id="projects-table"><thead></thead><tbody></tbody></table></div>
   </section>
 
-  <!-- Distributions -->
-  <section class="grid-2" data-tab="overview">
-    <div class="card">
-      <div class="card-head"><h2>Hour-of-day</h2></div>
-      <div class="chart-wrap small"><canvas id="chart-hours"></canvas></div>
-    </div>
-    <div class="card">
-      <div class="card-head"><h2>Weekday</h2></div>
-      <div class="chart-wrap small"><canvas id="chart-dows"></canvas></div>
-    </div>
-  </section>
-
-  <!-- Top sessions table -->
-  <section class="card" data-tab="sessions">
+  <!-- Sessions: title, model mix, active time, cost, PRs -->
+  <section class="card" data-tab="sessions" data-card="sessions">
     <div class="card-head">
-      <h2>Longest conversations</h2>
-      <div class="seg" id="sess-seg">
-        <button data-by="tokens" class="on">tokens</button>
-        <button data-by="msgs">messages</button>
-        <button data-by="duration">duration</button>
-        <button data-by="cost">cost</button>
+      <div class="card-title">
+        <h2>Sessions</h2>
+        <div class="muted" id="sess-hint">top 50 by API-rate cost</div>
+      </div>
+      <div class="seg" id="sess-seg" role="group" aria-label="Rank sessions by">
+        <button data-by="cost" class="on" aria-pressed="true">cost</button>
+        <button data-by="tokens" aria-pressed="false">tokens</button>
+        <button data-by="msgs" aria-pressed="false">messages</button>
+        <button data-by="active" aria-pressed="false">active time</button>
+        <button data-by="duration" aria-pressed="false">span</button>
+        <button data-by="recent" aria-pressed="false">recent</button>
       </div>
     </div>
-    <div class="table-wrap">
-      <table id="sessions-table">
-        <thead><tr>
-          <th>Project</th><th>Model</th><th>Msgs</th><th>Tokens</th>
-          <th>Cost</th><th>Duration</th><th>Started</th>
-        </tr></thead>
-        <tbody></tbody>
-      </table>
-    </div>
+    <div class="table-wrap"><table id="sessions-table" class="sessions-table"><thead></thead><tbody></tbody></table></div>
   </section>
 
   <!-- Top days -->
-  <section class="card" data-tab="sessions">
-    <div class="card-head"><h2>Most active days</h2></div>
-    <div class="table-wrap">
-      <table id="topdays-table">
-        <thead><tr><th>Day</th><th>Msgs</th><th>Sessions</th><th>Tokens</th><th>Cost</th></tr></thead>
-        <tbody></tbody>
-      </table>
+  <section class="card" data-tab="sessions" data-card="topdays">
+    <div class="card-head"><h2>Most active days</h2><div class="muted">top 10 by tokens</div></div>
+    <div class="table-wrap"><table id="topdays-table"><thead></thead><tbody></tbody></table></div>
+  </section>
+
+  <!-- Breakdown: where the spend went, API reliability, reconciliation -->
+  <section class="card" data-tab="breakdown" data-card="breakdown">
+    <div class="card-head">
+      <div class="card-title">
+        <h2>Where the spend went</h2>
+        <div class="muted" id="bd-hint">API-rate cost by token type</div>
+      </div>
+      <div class="seg dim-seg" id="bd-seg" role="group" aria-label="Break spend down by">
+        <button data-dim="token_type" class="on" aria-pressed="true">Token type</button>
+        <button data-dim="sidechain" aria-pressed="false">Main vs subagent</button>
+        <button data-dim="agent" aria-pressed="false">Agent type</button>
+        <button data-dim="skill" aria-pressed="false">Skill</button>
+        <button data-dim="mcp" aria-pressed="false">MCP server</button>
+        <button data-dim="plugin" aria-pressed="false">Plugin</button>
+        <button data-dim="branch" aria-pressed="false">Branch</button>
+        <button data-dim="pr" aria-pressed="false">PR</button>
+        <button data-dim="entrypoint" aria-pressed="false">Entry point</button>
+        <button data-dim="effort" aria-pressed="false">Effort</button>
+      </div>
+      <label class="dim-select">
+        <span class="sr-only">Break spend down by</span>
+        <select id="bd-select">
+          <option value="token_type">Token type</option>
+          <option value="sidechain">Main vs subagent</option>
+          <option value="agent">Agent type</option>
+          <option value="skill">Skill</option>
+          <option value="mcp">MCP server</option>
+          <option value="plugin">Plugin</option>
+          <option value="branch">Branch</option>
+          <option value="pr">PR</option>
+          <option value="entrypoint">Entry point</option>
+          <option value="effort">Effort</option>
+        </select>
+      </label>
     </div>
+    <div class="attrib" id="bd-attrib"></div>
+    <div class="chart-wrap" id="bd-chart-wrap"><canvas id="chart-breakdown"></canvas></div>
+    <ul class="card-notes" id="bd-notes" hidden></ul>
+    <div class="table-wrap"><table id="breakdown-table"><thead></thead><tbody></tbody></table></div>
+  </section>
+
+  <section class="card" data-tab="breakdown" data-card="reliability">
+    <div class="card-head">
+      <div class="card-title">
+        <h2>API errors and retries</h2>
+        <div class="muted" id="rel-hint">events per day, from the transcripts</div>
+      </div>
+    </div>
+    <div class="legend-totals" id="rel-legend"></div>
+    <div class="chart-wrap small"><canvas id="chart-reliability"></canvas></div>
+    <h3 class="sub-head">By detail</h3>
+    <div class="table-wrap"><table id="reliability-table"><thead></thead><tbody></tbody></table></div>
+  </section>
+
+  <section class="card" data-tab="breakdown" data-card="reconciliation">
+    <div class="card-head">
+      <div class="card-title">
+        <h2>Claude Code's own tally vs ours</h2>
+        <div class="muted">same sessions, two cost figures: ours from the transcripts, Claude Code's from its cost record</div>
+      </div>
+    </div>
+    <div class="recon-stats" id="recon-stats"></div>
+    <ul class="gap-split" id="recon-split" aria-label="Where the gap comes from" hidden></ul>
+    <p class="card-note" id="recon-note"></p>
+    <div class="table-wrap"><table id="reconciliation-table"><thead></thead><tbody></tbody></table></div>
   </section>
 
   <!-- Extras: Activity & tools (only shown when started with --all) -->
@@ -205,84 +451,70 @@
       <div class="kpi"><div class="k">Slash prompts</div>        <div class="v" id="ex-kpi-slash" data-loading="1"></div><div class="sub" id="ex-kpi-slash-sub"></div></div>
     </section>
 
-    <section class="card">
+    <section class="card" data-card="skills">
       <div class="card-head">
         <h2>Skill usage</h2>
-        <div class="seg" id="skills-seg">
-          <button data-by="least" class="on">least used</button>
-          <button data-by="most">most used</button>
+        <div class="seg" id="skills-seg" role="group" aria-label="Order skills by">
+          <button data-by="least" class="on" aria-pressed="true">least used</button>
+          <button data-by="most" aria-pressed="false">most used</button>
         </div>
       </div>
       <div class="chart-wrap"><canvas id="chart-skills"></canvas></div>
     </section>
 
     <section class="grid-2">
-      <div class="card">
+      <div class="card" data-card="tools">
         <div class="card-head"><h2>Tools by use count</h2></div>
         <div class="chart-wrap tall"><canvas id="chart-tools"></canvas></div>
       </div>
-      <div class="card">
+      <div class="card" data-card="mcp">
         <div class="card-head"><h2>MCP servers</h2></div>
         <div class="chart-wrap tall"><canvas id="chart-mcp"></canvas></div>
       </div>
     </section>
 
     <section class="grid-2">
-      <div class="card">
+      <div class="card" data-card="agents">
         <div class="card-head"><h2>Sub-agents</h2></div>
         <div class="chart-wrap small"><canvas id="chart-agents"></canvas></div>
       </div>
-      <div class="card">
+      <div class="card" data-card="bash">
         <div class="card-head"><h2>Bash verbs</h2></div>
         <div class="chart-wrap small"><canvas id="chart-bash"></canvas></div>
       </div>
     </section>
 
     <section class="grid-2">
-      <div class="card">
+      <div class="card" data-card="slash">
         <div class="card-head"><h2>Slash commands</h2></div>
-        <div class="table-wrap">
-          <table id="slash-table">
-            <thead><tr><th>Command</th><th>Uses</th><th>Last used</th></tr></thead>
-            <tbody></tbody>
-          </table>
-        </div>
+        <div class="table-wrap"><table id="slash-table"><thead></thead><tbody></tbody></table></div>
       </div>
-      <div class="card">
+      <div class="card" data-card="errors">
         <div class="card-head"><h2>Tool error rates</h2></div>
-        <div class="table-wrap">
-          <table id="errors-table">
-            <thead><tr><th>Tool</th><th>Errors</th><th>Total</th><th>Error %</th></tr></thead>
-            <tbody></tbody>
-          </table>
-        </div>
+        <div class="table-wrap"><table id="errors-table"><thead></thead><tbody></tbody></table></div>
       </div>
     </section>
 
-    <section class="card">
+    <section class="card" data-card="files">
       <div class="card-head"><h2>Most-touched files</h2></div>
-      <div class="table-wrap">
-        <table id="files-table">
-          <thead><tr><th>Path</th><th>Touches</th><th>Edits</th><th>Writes</th><th>Reads</th></tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
+      <div class="table-wrap"><table id="files-table"><thead></thead><tbody></tbody></table></div>
     </section>
 
-    <section class="card">
+    <section class="card" data-card="calls">
       <div class="card-head">
         <h2>Tool call log</h2>
         <div class="calls-controls">
+          <label class="sr-only" for="calls-tool">Filter by tool</label>
           <select id="calls-tool"><option value="">all tools</option></select>
-          <div class="seg" id="calls-seg">
-            <button data-status="" class="on">all</button>
-            <button data-status="errors">errors only</button>
+          <div class="seg" id="calls-seg" role="group" aria-label="Status">
+            <button data-status="" class="on" aria-pressed="true">all</button>
+            <button data-status="errors" aria-pressed="false">errors only</button>
           </div>
         </div>
       </div>
       <div class="table-wrap">
         <table id="calls-table">
-          <thead><tr><th>Time</th><th>Tool</th><th>Detail</th><th>Project</th></tr></thead>
+          <thead><tr><th scope="col">Time</th><th scope="col">Tool</th><th scope="col">Detail</th><th scope="col">Project</th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
@@ -303,7 +535,7 @@
   </footer>
 </main>
 
-<script src="/static/exporter.js"></script>
-<script src="/static/app.js"></script>
+<script src="/static/exporter.js?v={{ v }}"></script>
+<script src="/static/app.js?v={{ v }}"></script>
 </body>
 </html>

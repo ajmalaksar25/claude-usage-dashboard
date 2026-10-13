@@ -34,13 +34,14 @@ Example session:
     $ python ccm.py doctor
 
 Commands: list, create <name>, init-shared [--from-profile <name>],
-link [<name> | --all], aliases [--shell zsh|bash|powershell|all], doctor.
+link [<name> | --all], aliases [--shell zsh|bash|fish|powershell|all], doctor.
 """
 
 from __future__ import annotations
 
 import argparse
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -187,12 +188,204 @@ def dir_status(profile: Path, name: str) -> str:
     return "missing"
 
 
+# ------------------------------------------------------------ sharing report
+
+def _raw_state(path: Path) -> str:
+    """'missing' | 'broken' | 'link' | 'dir' | 'file' for a path (no resolving)."""
+    if is_link(path):
+        return "link" if os.path.exists(path) else "broken"
+    if path.is_dir():
+        return "dir"
+    if path.exists():
+        return "file"
+    return "missing"
+
+
+def _real(path: Path) -> str:
+    return os.path.realpath(path)
+
+
+def sharing_report(profiles: list[tuple[str, Path]] | None = None) -> dict[str, dict]:
+    """Per shared dir: {"shared_source": real path | None, "statuses": {profile: status}}.
+
+    Statuses: source | linked | separate | missing | broken. Works for both
+    layouts: a dedicated ~/.claude-shared, or one profile (usually the
+    default ~/.claude) holding the real dirs that other profiles link to.
+    """
+    if profiles is None:
+        profiles = discover_profiles()
+    report: dict[str, dict] = {}
+    for d in SHARED_DIRS:
+        shared = shared_home() / d
+        shared_real = _real(shared) if shared.is_dir() else None
+        default_real = _real(profile_path("default") / d)
+        states = {n: _raw_state(p / d) for n, p in profiles}
+        counts: dict[str, int] = {}
+        for n, p in profiles:
+            if states[n] == "link" and (p / d).is_dir():
+                r = _real(p / d)
+                counts[r] = counts.get(r, 0) + 1
+        source: str | None = None
+        if counts:
+            best = max(counts.values())
+            tied = [r for r, c in counts.items() if c == best]
+            if len(tied) == 1:
+                pick = tied[0]
+            elif shared_real in tied:
+                pick = shared_real
+            elif default_real in tied:
+                pick = default_real
+            else:
+                pick = sorted(tied)[0]
+            if counts[pick] >= 2 or pick in (shared_real, default_real):
+                source = pick
+        if source is None and shared_real is not None:
+            source = shared_real
+        statuses: dict[str, str] = {}
+        for n, p in profiles:
+            st = states[n]
+            if st in ("missing", "broken"):
+                statuses[n] = st
+            elif source is not None and _real(p / d) == source:
+                statuses[n] = "linked" if st == "link" else "source"
+            else:
+                statuses[n] = "separate"
+        report[d] = {"shared_source": source, "statuses": statuses}
+    return report
+
+
+# ------------------------------------------------------- shell / alias utils
+
+_KNOWN_SHELLS = ["zsh", "bash", "fish", "powershell"]
+
+
+def detect_shell(env: dict | None = None, os_name: str | None = None,
+                 sys_platform: str | None = None) -> dict:
+    """{"platform", "shell", "rc_file"} for the current (or injected) environment."""
+    env = os.environ if env is None else env
+    os_name = os.name if os_name is None else os_name
+    sys_platform = sys.platform if sys_platform is None else sys_platform
+    if os_name == "nt" or sys_platform.startswith(("win", "cygwin", "msys")):
+        platform = "windows"
+    elif sys_platform == "darwin":
+        platform = "darwin"
+    else:
+        platform = "linux"
+    if platform == "windows":
+        shell = "powershell"
+    else:
+        shell = os.path.basename((env.get("SHELL") or "").rstrip("/\\")) or \
+            ("zsh" if platform == "darwin" else "bash")
+    return {"platform": platform, "shell": shell,
+            "rc_file": _rc_file(shell, platform, env)}
+
+
+def _rc_file(shell: str, platform: str, env: dict) -> str:
+    home = home_dir()
+    if shell == "zsh":
+        zd = env.get("ZDOTDIR")
+        base = Path(zd).expanduser() if zd else home
+        return str(base / ".zshrc")
+    if shell == "bash":
+        rc = home / ".bashrc"
+        bp = home / ".bash_profile"
+        if platform == "darwin" and not rc.exists() and bp.exists():
+            return str(bp)
+        return str(rc)
+    if shell == "fish":
+        return str(home / ".config" / "fish" / "config.fish")
+    if shell == "powershell":
+        prof = env.get("PROFILE")
+        if prof:
+            return str(Path(prof).expanduser())
+        return str(home / "Documents" / "PowerShell" / "Microsoft.PowerShell_profile.ps1")
+    return str(home / ".profile")
+
+
 def alias_lines(name: str, shell: str) -> str:
     suffix = ".claude" if name == "default" else f".claude-{name}"
     if shell == "powershell":
         return (f"function claude-{name} {{ "
                 f"$env:CLAUDE_CONFIG_DIR=\"$HOME\\{suffix}\"; claude @args }}")
+    if shell == "fish":
+        return f"alias claude-{name} 'CLAUDE_CONFIG_DIR=\"$HOME/{suffix}\" claude'"
     return f"alias claude-{name}='CLAUDE_CONFIG_DIR=\"$HOME/{suffix}\" claude'"
+
+
+def installed_alias(name: str, rc_file: str) -> str | None:
+    """Name of the alias/function in rc_file that launches this profile, or None.
+
+    Matches `claude-<name>` by name, or any alias/function whose line sets CLAUDE_CONFIG_DIR to the
+    profile's dir (e.g. `alias claudex='CLAUDE_CONFIG_DIR=$HOME/.claude-codex claude'`)."""
+    try:
+        text = Path(rc_file).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    n = re.escape(f"claude-{name}")
+    pat = re.compile(rf"^\s*(?:alias\s+{n}(?:[=\s]|$)|function\s+{n}(?:[\s({{]|$))", re.MULTILINE)
+    if pat.search(text):
+        return f"claude-{name}"
+    suffix = re.escape(".claude" if name == "default" else f".claude-{name}")
+    by_dir = re.compile(r"^\s*(?:alias\s+([\w.-]+)|function\s+([\w.-]+))[^\n]*CLAUDE_CONFIG_DIR[^\n]*?"
+                        rf"[/\\]{suffix}(?![\w-])", re.MULTILINE)
+    m = by_dir.search(text)
+    if m:
+        return m.group(1) or m.group(2)
+    return "claude" if name == "default" else None  # plain `claude` already uses ~/.claude
+
+
+def alias_installed(name: str, rc_file: str) -> bool:
+    """True if rc_file defines an alias/function that launches this profile (see installed_alias)."""
+    return installed_alias(name, rc_file) is not None
+
+
+def alias_block(name: str, shell: str | None = None) -> dict:
+    det = detect_shell()
+    shell = shell or det["shell"]
+    rc = det["rc_file"] if shell == det["shell"] else _rc_file(shell, det["platform"], os.environ)
+    found = installed_alias(name, rc)
+    return {
+        "primary": {"shell": shell, "rc_file": rc, "line": alias_lines(name, shell)},
+        "other": {sh: alias_lines(name, sh) for sh in _KNOWN_SHELLS if sh != shell},
+        "installed": found is not None,
+        "installed_name": found,
+    }
+
+
+def profile_report(profiles: list[tuple[str, Path]] | None = None) -> list[dict]:
+    if profiles is None:
+        profiles = discover_profiles()
+    sharing = sharing_report(profiles)
+    out = []
+    for name, path in profiles:
+        statuses = {d: sharing[d]["statuses"][name] for d in SHARED_DIRS}
+        out.append({
+            "name": name,
+            "path": str(path),
+            "credentials": (path / ".credentials.json").is_file(),
+            "sessions": session_count(path),
+            "shared": statuses,
+            "shared_source": {d: sharing[d]["shared_source"] for d in SHARED_DIRS},
+            "linked": sum(1 for s in statuses.values() if s in ("linked", "source")),
+            "alias": alias_block(name),
+        })
+    return out
+
+
+def layout_report() -> dict:
+    profiles = discover_profiles()
+    sharing = sharing_report(profiles)
+    det = detect_shell()
+    return {
+        "profiles": profile_report(profiles),
+        "shared_sources": {d: sharing[d]["shared_source"] for d in SHARED_DIRS},
+        "shared_root": str(shared_home()),
+        "shared_exists": shared_home().is_dir(),
+        "shared_dirs": SHARED_DIRS,
+        "platform": det["platform"],
+        "shell": det["shell"],
+        "rc_file": det["rc_file"],
+    }
 
 
 # ------------------------------------------------------------------ commands
@@ -204,17 +397,20 @@ def cmd_list(_args: argparse.Namespace) -> int:
         print("Create one with: python ccm.py create <name>")
         return 0
     shared = shared_home()
-    print(f"Shared resources: {shared} ({'present' if shared.is_dir() else 'not created - run init-shared'})")
+    print(f"Shared home: {shared} ({'present' if shared.is_dir() else 'not created'})")
+    sharing = sharing_report(profiles)
+    for d in SHARED_DIRS:
+        src = sharing[d]["shared_source"]
+        print(f"  {d:<9} source: {src or '(none)'}")
     print()
     for name, path in profiles:
         creds = "yes" if (path / ".credentials.json").is_file() else "no"
-        sessions = session_count(path)
-        statuses = {d: dir_status(path, d) for d in SHARED_DIRS}
-        linked = sum(1 for s in statuses.values() if s == "linked")
-        extras = [f"{d}:{s}" for d, s in statuses.items() if s not in ("linked", "missing")]
+        statuses = {d: sharing[d]["statuses"][name] for d in SHARED_DIRS}
+        linked = sum(1 for s_ in statuses.values() if s_ in ("linked", "source"))
+        extras = [f"{d}:{s_}" for d, s_ in statuses.items() if s_ not in ("linked", "source")]
         detail = f" ({', '.join(extras)})" if extras else ""
         print(f"  {name:<12} {path}")
-        print(f"  {'':<12} credentials: {creds} | sessions: {sessions} | shared linked: {linked}/{len(SHARED_DIRS)}{detail}")
+        print(f"  {'':<12} credentials: {creds} | sessions: {session_count(path)} | shared: {linked}/{len(SHARED_DIRS)}{detail}")
     return 0
 
 
@@ -233,11 +429,12 @@ def cmd_create(args: argparse.Namespace) -> int:
         path.mkdir(parents=True)
         print(f"Created profile '{name}' at {path}")
     rc = 0
-    if shared_home().is_dir():
+    if shared_home().is_dir() or any(
+            v["shared_source"] for v in sharing_report().values()):
         rc = _link_profile(name, path)
     else:
-        print(f"Note: {shared_home()} does not exist yet; run init-shared first, then 'link {name}'.")
-    shell = "powershell" if os.name == "nt" else "zsh"
+        print(f"Note: no shared source found ({shared_home()} missing); run init-shared first, then 'link {name}'.")
+    shell = detect_shell()["shell"]
     print()
     print(f"Add this to your shell profile ({shell}; see 'aliases --shell all' for others):")
     print(f"  {alias_lines(name, shell)}")
@@ -287,40 +484,54 @@ def cmd_init_shared(args: argparse.Namespace) -> int:
 
 
 def _link_profile(name: str, path: Path) -> int:
+    profiles = discover_profiles()
+    if not any(n == name for n, _ in profiles):
+        profiles.append((name, path))
+    report = sharing_report(profiles)
     rc = 0
     for d in SHARED_DIRS:
-        target = shared_home() / d
-        status = dir_status(path, d)
         link = path / d
-        if status == "linked":
+        status = report[d]["statuses"][name]
+        source = report[d]["shared_source"]
+        target = shared_home() / d if shared_home().is_dir() else (Path(source) if source else None)
+        if target is None:
+            print(f"  {name}/{d}: no shared source found, skipped.")
+            continue
+        if status in ("source", "linked"):
+            print(f"  {name}/{d}: ok ({status})")
+            continue
+        if _real(link) == _real(target) and os.path.exists(link):
             print(f"  {name}/{d}: ok")
-        elif status in ("dangling", "wrong-target"):
+            continue
+        raw = _raw_state(link)
+        if raw == "missing":
+            kind = make_link(target, link)
+            print(f"  {name}/{d}: {kind} -> {target}")
+        elif raw in ("broken", "link"):
             remove_link(link)
             kind = make_link(target, link)
             print(f"  {name}/{d}: fixed ({status} -> {kind} to {target})")
-        elif status == "empty-dir":
+        elif raw == "dir" and not dir_has_content(link):
             link.rmdir()
             kind = make_link(target, link)
             print(f"  {name}/{d}: replaced empty dir with {kind} to {target}")
-        elif status == "missing":
-            kind = make_link(target, link)
-            print(f"  {name}/{d}: {kind} -> {target}")
-        elif status == "real-dir":
+        elif raw == "dir":
             print(f"  {name}/{d}: CONFLICT - real directory with content, not touched. "
                   f"Run 'init-shared --from-profile {name}' to move it into the shared home.")
             rc = 1
-        else:  # file
+        else:
             print(f"  {name}/{d}: CONFLICT - a file is in the way at {link}, not touched.")
             rc = 1
     return rc
 
 
 def cmd_link(args: argparse.Namespace) -> int:
-    if not shared_home().is_dir():
-        print(f"{shared_home()} does not exist - run 'init-shared' first.")
+    if shared_home().is_dir():
+        for d in SHARED_DIRS:
+            (shared_home() / d).mkdir(exist_ok=True)
+    elif not any(v["shared_source"] for v in sharing_report().values()):
+        print(f"{shared_home()} does not exist and no shared source was detected - run 'init-shared' first.")
         return 1
-    for d in SHARED_DIRS:
-        (shared_home() / d).mkdir(exist_ok=True)
     if args.all:
         targets = discover_profiles()
     elif args.name:
@@ -339,12 +550,14 @@ def cmd_link(args: argparse.Namespace) -> int:
 
 
 def cmd_aliases(args: argparse.Namespace) -> int:
-    shell = args.shell or ("powershell" if os.name == "nt" else "zsh")
+    det = detect_shell()
+    shell = args.shell or (det["shell"] if det["shell"] in _KNOWN_SHELLS else "zsh")
     profiles = discover_profiles() or [("default", profile_path("default"))]
-    shells = ["zsh", "bash", "powershell"] if shell == "all" else [shell]
+    shells = list(_KNOWN_SHELLS) if shell == "all" else [shell]
     for sh in shells:
         if len(shells) > 1:
             rc_file = {"zsh": "~/.zshrc", "bash": "~/.bashrc",
+                       "fish": "~/.config/fish/config.fish",
                        "powershell": "$PROFILE"}[sh]
             print(f"# {sh} ({rc_file})")
         for name, _path in profiles:
@@ -356,44 +569,40 @@ def cmd_aliases(args: argparse.Namespace) -> int:
 
 def cmd_doctor(_args: argparse.Namespace) -> int:
     problems = 0
-    shared = shared_home()
-    if shared.is_dir():
-        print(f"[ok]   shared home exists: {shared}")
-        for d in SHARED_DIRS:
-            if not (shared / d).is_dir():
-                print(f"[warn] shared dir missing: {shared / d} (run init-shared)")
-                problems += 1
-    else:
-        print(f"[warn] shared home missing: {shared} (run init-shared)")
-        problems += 1
     profiles = discover_profiles()
     if not profiles:
         print(f"[warn] no profiles found under {home_dir()}")
         return 1
+    sharing = sharing_report(profiles)
+    shared = shared_home()
+    if shared.is_dir():
+        print(f"[ok]   shared home exists: {shared}")
+    else:
+        print(f"[info] no {shared}; using detected sources where present")
+    for d in SHARED_DIRS:
+        src = sharing[d]["shared_source"]
+        if src:
+            print(f"[ok]   {d} shared source: {src}")
+        else:
+            print(f"[warn] {d}: no shared source (no links, no {shared / d}). Fix: python ccm.py init-shared --from-profile default")
+            problems += 1
     for name, path in profiles:
         if not (path / ".credentials.json").is_file():
             print(f"[warn] {name}: no .credentials.json - run 'claude-{name}' and log in.")
             problems += 1
         for d in SHARED_DIRS:
-            status = dir_status(path, d)
+            status = sharing[d]["statuses"][name]
             loc = path / d
-            if status == "linked":
-                print(f"[ok]   {name}/{d} -> {shared / d}")
-            elif status == "dangling":
+            if status in ("source", "linked"):
+                print(f"[ok]   {name}/{d}: {status}")
+            elif status == "broken":
                 print(f"[warn] {name}/{d}: dangling link (-> {link_target(loc)}). Fix: python ccm.py link {name}")
                 problems += 1
-            elif status == "wrong-target":
-                print(f"[warn] {name}/{d}: links to {link_target(loc)}, expected {shared / d}. Fix: python ccm.py link {name}")
-                problems += 1
-            elif status == "real-dir":
-                print(f"[warn] {name}/{d}: real directory with content (not shared). "
-                      f"Fix: python ccm.py init-shared --from-profile {name}")
-                problems += 1
-            elif status in ("empty-dir", "missing"):
-                print(f"[warn] {name}/{d}: not linked. Fix: python ccm.py link {name}")
+            elif status == "separate":
+                print(f"[warn] {name}/{d}: separate, not shared. Fix: python ccm.py link {name}")
                 problems += 1
             else:
-                print(f"[warn] {name}/{d}: unexpected file in the way at {loc}.")
+                print(f"[warn] {name}/{d}: missing. Fix: python ccm.py link {name}")
                 problems += 1
     print()
     if problems:
@@ -429,8 +638,8 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(func=cmd_link)
 
     p = sub.add_parser("aliases", help="print shell aliases for every profile")
-    p.add_argument("--shell", choices=["zsh", "bash", "powershell", "all"],
-                   help="default: powershell on Windows, zsh elsewhere")
+    p.add_argument("--shell", choices=["zsh", "bash", "fish", "powershell", "all"],
+                   help="default: the detected shell")
     p.set_defaults(func=cmd_aliases)
 
     sub.add_parser("doctor", help="audit shared home, links, and credentials").set_defaults(func=cmd_doctor)

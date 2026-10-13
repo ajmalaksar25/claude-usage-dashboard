@@ -1,0 +1,33 @@
+From: Google Play <googleplay-noreply@google.com>
+To: Test User <user@example.com>
+Subject: Your ChatGPT subscription will be cancelled
+Date: Sat, 08 Aug 2026 11:20:00 +0400
+Message-ID: <gp-fake-0006@mail.example.com>
+MIME-Version: 1.0
+Content-Type: multipart/alternative;
+ boundary="===============4600120299888034468=="
+
+--===============4600120299888034468==
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+
+Your subscription will be cancelled
+Your ChatGPT Pro (ChatGPT) subscription from OpenAI OpCo, LLC will be cancell=
+ed on 14 Aug 2026.
+You can keep using it until then. You can resubscribe in Google Play at any t=
+ime.
+
+--===============4600120299888034468==
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+MIME-Version: 1.0
+
+<html><body><table>
+<tr><td>Your subscription will be cancelled</td></tr>
+<tr><td>Your ChatGPT Pro (ChatGPT) subscription from OpenAI OpCo, LLC will be=
+ cancelled on 14 Aug 2026.</td></tr>
+<tr><td>You can keep using it until then. You can resubscribe in Google Play =
+at any time.</td></tr>
+</table></body></html>
+
+--===============4600120299888034468==--

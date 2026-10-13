@@ -1,0 +1,59 @@
+From: Apple <no_reply@email.apple.com>
+To: Test User <user@example.com>
+Subject: Your receipt from Apple.
+Date: Wed, 03 Jun 2026 08:00:00 +0200
+Message-ID: <apple-fake-0001@mail.example.com>
+MIME-Version: 1.0
+Content-Type: multipart/alternative;
+ boundary="===============8697073717439131924=="
+
+--===============8697073717439131924==
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+
+Receipt
+APPLE ACCOUNT
+user@example.com
+DATE
+3 Jun 2026
+ORDER ID
+MZ4K2LQ9XB
+DOCUMENT NO.
+182736455012
+App Store
+Claude by Anthropic
+Claude Pro (Monthly)
+Renews 3 Jul 2026
+Report a Problem
+22,99 =E2=82=AC
+Subtotal 19,32 =E2=82=AC
+VAT 19% 3,67 =E2=82=AC
+TOTAL 22,99 =E2=82=AC
+
+--===============8697073717439131924==
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+MIME-Version: 1.0
+
+<html><body><table>
+<tr><td>Receipt</td></tr>
+<tr><td>APPLE ACCOUNT</td></tr>
+<tr><td>user@example.com</td></tr>
+<tr><td>DATE</td></tr>
+<tr><td>3 Jun 2026</td></tr>
+<tr><td>ORDER ID</td></tr>
+<tr><td>MZ4K2LQ9XB</td></tr>
+<tr><td>DOCUMENT NO.</td></tr>
+<tr><td>182736455012</td></tr>
+<tr><td>App Store</td></tr>
+<tr><td>Claude by Anthropic</td></tr>
+<tr><td>Claude Pro (Monthly)</td></tr>
+<tr><td>Renews 3 Jul 2026</td></tr>
+<tr><td>Report a Problem</td></tr>
+<tr><td>22,99 =E2=82=AC</td></tr>
+<tr><td>Subtotal 19,32 =E2=82=AC</td></tr>
+<tr><td>VAT 19% 3,67 =E2=82=AC</td></tr>
+<tr><td>TOTAL 22,99 =E2=82=AC</td></tr>
+</table></body></html>
+
+--===============8697073717439131924==--
